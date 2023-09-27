@@ -7,7 +7,7 @@ const showRooms = [
             dates:[],
             place:"",
             description:"",
-            imgUrl:"",
+            imgUrl:"", 
         },
         taxonomy:{
 
@@ -25,14 +25,12 @@ const users = [
     {
         userId:"",
         createdAt:Date(),
-        type:"buyers" || "sellers",
-        credentials:{
-            name:"",
-            lastname:"",
-            username:"",
-            email:"",
-            imgUrl:"",
-        }
+        type:"buyer" || "seller",
+        name:"",
+        lastname:"",
+        username:"",
+        email:"",
+        imgUrl:"",
     }
 ]
 
@@ -54,7 +52,7 @@ const sellers = [
             name:"",
             imgUrl:"",
             standId:"",
-            pic360:""
+            pic360Url:""
         }
     }
 ]
@@ -84,11 +82,13 @@ const products = [
 const buyers = [
     {   
         buyerId:"",
+        // admin user
         admin:{
             username:"",
             userId:""
         },
         createdAt:Date(),
+        // live
         liveCoords:{
             lat:0,
             lng:0,
@@ -99,10 +99,12 @@ const buyers = [
             matchQuality:0,
             matrixDistance:0
         },
+        // queries
         docsQueriesIds:[],
         onDocQueryId:"",
-        docSelectedProductSuggestionId:"",
-        // sub collection
+        docIdSelectedOfProductsSuggestions:"",
+        
+        // **** sub collection
         productSuggestions:[
             {
                 productId:"",
@@ -119,6 +121,10 @@ const queries = [
         string:"",
         audioFileUrl:"",
         keyWords:[],
+        admin:{
+            username:"",
+            userId:""
+        },
         coords:{
             lat:0,
             lng:0,
