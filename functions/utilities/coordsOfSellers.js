@@ -1,5 +1,5 @@
 // firebase
-const { db } = require('../utilities/config')
+const { db } = require('../../firebase')
 
 // extract companyData
 module.exports = async (req,res,next) => {
