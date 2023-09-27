@@ -5,16 +5,15 @@ const fs = require('fs');
 const csv = require('csv-parser');
 // libs
 const BusBoy = require('busboy');
-// firebase
-// const admin = require('firebase-admin'); // Asumo que se requiere admin desde firebase-admin.
-const bucket = admin.storage().bucket();
-const { db } = require('../utilities/config');
-// geofire
-// const geofire = require('geofire-common')
+// firebase 
+const { db, admin, storage } = require('../../firebase/admin');
+const bucket = storage.bucket();
+// const bucket = admin.storage().bucket();
 
 // post products in statics with only a .csv file
 exports.postProductsWithCsvFileToStaticDevices = async (req, res) => {
     
+    // upload file to firestore
     const uploadFileToBucket = async (filepath, mimetype) => {
         await bucket.upload(filepath, {
             resumable: false,
@@ -26,44 +25,52 @@ exports.postProductsWithCsvFileToStaticDevices = async (req, res) => {
         });
     };
     
+    // extract csv data
     const extractDataFromCSV = (filepath) => {
         return new Promise((resolve, reject) => {
             const dataObject = [];
             fs.createReadStream(filepath)
                 .pipe(csv())
                 .on('data', (row) => {
-                    const car = {};
+                    let car = {
+                        taxonomy:{}
+                    };
                     for (const key in row) {
-                        if (key !== 'name' && key !== 'shortDescription') {
-                            car[key] = row[key];
-                        }
+                        // if (
+                        //     key !== 'name' && 
+                        //     key !== 'shortDescription'
+                        // ) {
+                            car.taxonomy[key] = row[key];
+                        //}
                     }
                     dataObject.push(car);
                 })
-                .on('end', () => resolve(dataObject))
+                .on('end',()=>resolve(dataObject))
                 .on('error', reject);
         });
     };
 
     // extract keys & values
-    let outputTaxonomy = (obj) => {
+    const outputTaxonomy = (obj) => {
         let arrKeys = []
         let arrValues = []
         // loop
         Object
             .entries(obj.taxonomy)
             .map(([key,value]) => { 
-                if(
-                    key == 'turbo' && 
-                    key == 'ABS' &&
-                    key == 'parking sensor' &&
-                    key == 'used' &&
-                    key == 'financialAid' 
-                ){
-                    arrValues.push(key)
-                } else {
-                    arrKeys.push(key)
-                    arrValues.push(value)
+                if(key != 'shortDescription'){
+                    if(
+                        key == 'turbo' && 
+                        key == 'ABS' &&
+                        key == 'parking sensor' &&
+                        key == 'used' &&
+                        key == 'financialAid' 
+                    ){
+                        arrValues.push(key)
+                    } else {
+                        arrKeys.push(key)
+                        arrValues.push(value)
+                    }
                 }
             })
         // print
@@ -75,102 +82,109 @@ exports.postProductsWithCsvFileToStaticDevices = async (req, res) => {
     }
 
     // extract companyData
-    const extractCompanyData = async (idProperty) => {
+    const extractCompanyData = async (sellerIdOwner) => {
         // vars
-        const outputList = []
-        // extract userHandle
-        const userHandle = idProperty.split("-").slice(0,1).toString()
+        let companyData
+        
         // db connection
         db
-            .collection(`/users/${userHandle}/companyData`)
+            .doc(`/sellers/${sellerIdOwner}`)
             .get()
-            .then((snapshot) => {
-                // check if exists
-                if (snapshot.empty) {
-                    console.log('No matching documents.')
+            .then((doc) => {
+                if (doc.exists) {
+                    companyData = doc.data() 
+                    return companyData
                 } else {
-                    snapshot.forEach((doc) => {
-                        outputList.push({
-                            companyName:doc.data().companyName,
-                            localPicUrl:doc.data().localPicUrl,
-                        })
-                    })
-                    // print
-                    console.log(`outputList:${JSON.stringify(outputList)}`)
-                    return outputList
-                }  
+                    return res.status(404).json({ error: 'userDevice not found' });
+                }
             })
+            .catch((err) => {
+                console.error(err);
+                res.status(500).json({ error: err.code });
+            }); 
     }
 
+    // add data to fb
     const addProductsToFirestore = async (products) => {
         const batch = db.batch();
         const productCollection = db.collection('products');
         const productDoc = productCollection.doc(); 
+        // vars from req
+        const showRoom = req.body.showRoom
+        const sellerIdOwner = req.body.sellerIdOwner
+        // loop over products
         products.forEach(async product => {
             let dataObject = {
-                name:product.name,
-                description:product.description,
-                price:product.price,
-                taxonomy:product,
-
-                tags:outputTaxonomy(product).arrValues, 
-                categories:outputTaxonomy(product).arrKeys,
-                
-                staticDeviceProperty:req.body.staticDeviceProperty,
-                familyOfDevices:req.body.familyOfDevices,
-                // imgUrl:.imgUrl,
+                // basic info
+                name:product.taxonomy.name,
+                shortDescription:product.taxonomy.shortDescription,
+                price:product.taxonomy.price,
+                // images
+                imgUrl:[],
+                // metadata
+                tags:outputTaxonomy(product.taxonomy).arrValues, 
+                categories:outputTaxonomy(product.taxonomy).arrKeys,
+                taxonomy:product.taxonomy,
+                // showroom data
+                showRoom,
+                // date 
                 createdAt:new Date().toISOString(),
-                // this fields depends of if what search products for it location
-                companyName:await extractCompanyData(idProperty).outputList[0],
+                // company data
+                sellerIdOwner,
+                companyName:await extractCompanyData(sellerIdOwner),
                 coords:res.locals.coordsData.coords,
             }
+            // pass data to the doc
             batch.set(productDoc, dataObject);
         });
     
         await batch.commit();
     };
     
-
     try {
-        const staticDeviceProperty = req.body.staticDeviceProperty;
-        // get data from req
-        const busboy = new BusBoy({ headers: req.headers });
-        let filepath;
-        let mimetype;
+        // check if the user can post on products collection
+        if(req.user.type === "seller"){
+            // get data from req
+            const busboy = new BusBoy({ headers: req.headers });
+            let filepath;
+            let mimetype;
 
-        // busboy events set.
-        busboy.on('file', (fieldname, file, filename, encoding, mime) => {
-            if (mime !== 'text/csv') {
-                throw new Error('Wrong file type submitted');
-            }
+            // busboy events set.
+            busboy.on('file', (fieldname, file, filename, encoding, mime) => {
+                if (mime !== 'text/csv') {
+                    throw new Error('Wrong file type submitted');
+                }
 
-            const imageExtension = filename.split('.').pop();
-            const newFileName = `${staticDeviceProperty} - ${Date.now()} - ${filename}.${imageExtension}`;
-            filepath = path.join(os.tmpdir(), newFileName);
-            mimetype = mime;
+                const imageExtension = filename.split('.').pop();
+                const newFileName = `${staticDeviceProperty} - ${Date.now()} - ${filename}.${imageExtension}`;
+                filepath = path.join(os.tmpdir(), newFileName);
+                mimetype = mime;
 
-            file.pipe(fs.createWriteStream(filepath));
-        });
+                file.pipe(fs.createWriteStream(filepath));
+            });
 
-        await new Promise((resolve, reject) => {
-            busboy.on('finish', resolve);
-            busboy.on('error', reject);
-            busboy.end(req.rawBody);
-        });
-        // run it
-        await uploadFileToBucket(filepath, mimetype);
-        const dataObjectTaxo = await extractDataFromCSV(filepath);
-        await addProductsToFirestore(dataObjectTaxo);
-        // print
-        console.log('List of Cars:', dataObject);
-        // erase temp file
-        fs.unlink(filepath, (err) => {
-            if (err) {
-                console.error('Error removing temp file:', err);
-            }
-        });
-        // res
-        res.json({ message: 'csv file was uploaded successfully' });
+            await new Promise((resolve, reject) => {
+                busboy.on('finish', resolve);
+                busboy.on('error', reject);
+                busboy.end(req.rawBody);
+            });
+            // run main methods
+            await uploadFileToBucket(filepath, mimetype);
+            const dataObjectTaxo = await extractDataFromCSV(filepath);
+            await addProductsToFirestore(dataObjectTaxo);
+            // print
+            console.log('List of Cars:', dataObjectTaxo);
+            // erase temp file
+            fs.unlink(filepath, (err) => {
+                if (err) {
+                    console.error('Error removing temp file:', err);
+                }
+            });
+            // res
+            res.json({ message: 'csv file was uploaded successfully' });
+        } else {
+            res.status(500).json({ error: 'you must have the require permissions' });
+        }
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
