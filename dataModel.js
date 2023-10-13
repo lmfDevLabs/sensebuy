@@ -10,7 +10,7 @@ const showRooms = [
             imgUrl:"", 
         },
         taxonomy:{
-
+            
         },
         coords:{
             lat:0,
@@ -95,7 +95,7 @@ const buyers = [
             hash:"",
             nameOfPoint:""
         },
-        liveFeed:{
+        liveFeed:{ // colors???????
             matchQuality:0,
             matrixDistance:0
         },
@@ -104,14 +104,15 @@ const buyers = [
         onDocQueryId:"",
         docIdSelectedOfProductsSuggestions:"",
         
-        // **** sub collection
-        productSuggestions:[
-            {
-                productId:"",
-                createdAt:Date(),
-            }
-        ]
+        
     }  
+]
+
+const productSuggestions = [
+    {
+        productId:"",
+        createdAt:Date(),
+    }
 ]
 
 const queries = [
