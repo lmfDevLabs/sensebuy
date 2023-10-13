@@ -8,92 +8,185 @@ const {
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-// busboy
+// busboy   
 const BusBoy = require('busboy');
-    
+// validate data
+const { 
+    reduceSeller,
+    validateCoordsData
+} = require('../../utilities/validation');
 
 // post products in statics with only a .csv file
-exports.postSeller = async (req, res) => {
-    // check if the user can post on sellers collection
-    if(req.user.type === "seller"){
-        let sellerDetails = reduceUserDetails(req.body)
-        
-        // take data from user req
-        // const { name, address } = req.body;
-
-        try {
-            const newSellerRef = await db.collection('sellers').add({
-                createdAt:new Date().toISOString(),
-                admin:{
-                    username:"",
-                    userId:""
-                },
-                coords:res.locals.coordsData.coords,
-                companyData:{
-                    name:"",
-                    imgUrl:"",
-                    standId:"",
-                    pic360Url:""
-                }
-            });
-            res.status(200).send({ id: newSellerRef.id });
-        } catch (error) {
-            res.status(500).send(error.message);
+exports.sellers = async (req, res) => {
+    try {
+        // check if the user can post on sellers collection
+        if(req.user.type === "seller"){
+            // validation
+            // let {sellerDetails} = reduceSeller(req.body)
+            // console.log(sellerDetails);
+            // create seller
+                const newSellerRef = await db.collection('sellers').add({
+                    createdAt:new Date().toISOString(),
+                    admin:{ 
+                        username:req.user.username,
+                        userId:req.user.uid
+                    },
+                    coords:{},
+                    companyData:{
+                        name:req.body.companyData.name,
+                        //name:sellerDetails.companyData.name,
+                        imgUrl:"", 
+                        standId:req.body.companyData.standId,
+                        //standId:sellerDetails.companyData.standId,
+                        pic360Url:""
+                    }
+                });
+                // res.status(200).send({ id: newSellerRef.id });
+                res.status(200).send("seller created successfully");
+            
+        } else {
+            res.status(500).json({ error: 'you must have the require permissions' });
         }
-    } else {
-        res.status(500).json({ error: 'you must have the require permissions' });
+    } catch (error) {
+        res.status(500).send(error.message);
     }
 }
 
-exports.postPic360UrlOnSellerDoc = (req, res) => {
+exports.coords = async (req, res) => {
 
-    // check if the user can post on sellers collection
-    if(req.user.type === "seller"){
-    
-        const busboy = new BusBoy({ headers: req.headers });
+    try {
+        
+        // Check user type
+        if (req.user.type !== "seller") {
+            return res.status(403).json({ error: 'Insufficient permissions' });
+        }
 
-        let imageToBeUploaded = {};
-        let imageFileName;
+        // Validate coords data
+        // const { coordsValidate, valid, errors } = validateCoordsData(coords);
+        // if (!valid) {
+        //     return res.status(400).json(errors);
+        // }
 
-        busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-            console.log(fieldname, file, filename, encoding, mimetype);
-            if (mimetype !== 'image/jpeg' && mimetype !== 'image/png') {
-                return res.status(400).json({ error: 'Wrong file type submitted' });
-            }
-            // my.image.png => ['my', 'image', 'png']
-            const imageExtension = filename.split('.')[filename.split('.').length - 1];
-            // 32756238461724837.png
-            imageFileName = `${Math.round(Math.random() * 1000000000000).toString()}.${imageExtension}`;
-            const filepath = path.join(os.tmpdir(), imageFileName);
-            imageToBeUploaded = { filepath, mimetype };
-            file.pipe(fs.createWriteStream(filepath));
-        });
+        const sellerRef = db.collection('sellers').where('admin.userId', '==', req.user.uid);
+        const sellerSnapshot = await sellerRef.get();
 
-        busboy.on('finish', () => {
-            
-            bucket
-                .upload(imageToBeUploaded.filepath, {
-                    resumable: false,
-                    metadata: {
-                        metadata: {
-                        contentType: imageToBeUploaded.mimetype
+        if (!sellerSnapshot.empty) {
+            // geofirestore
+            const geofire = require('geofire-common');
+            // Utilizando un array para almacenar todas las promesas de actualización
+            const updates = [];
+
+            sellerSnapshot.forEach(doc => {
+                const coords = req.body.coords;
+
+                // Utilizando async/await para realizar la actualización
+                const updatePromise = (async () => {
+                    await doc.ref.update({
+                        coords:{
+                            lat: coords.lat,
+                            lng: coords.lng,
+                            pointName: coords.pointName,
+                            hash: geofire.geohashForLocation([
+                                coords.lat,
+                                coords.lng
+                            ])
                         }
-                    }
-                })  
-                .then(() => {
-                    const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
-                    return db.doc(`/sellers/${req.user.username}`).update({ pic360Url });
-                })
-                .then(() => {
-                    return res.json({ message: 'image uploaded successfully' });
-                })
-                .catch((err) => {
-                    console.error(err);
-                    return res.status(500).json({ error: 'something went wrong' });
-                });
-        });
-        busboy.end(req.rawBody);
-    } else {
-        res.status(500).json({ error: 'you must have the require permissions' });
+                    });
+                })();
+                
+                updates.push(updatePromise);
+            });
+
+            // Esperando a que todas las actualizaciones se completen
+            await Promise.all(updates);
+            return res.status(200).json({ message: "Coords updated successfully" });
+        } else {
+            return res.status(404).json({ error: 'Seller not found' });
+        }
+
+        
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: error.message });
     }
 };
+    
+exports.postPic360UrlOnSellerDoc = (req, res) => {
+    try {
+        // check if the user can post on sellers collection
+        if(req.user.type === "seller"){
+
+            const busboy = new BusBoy({ headers: req.headers });
+
+            let imageToBeUploaded = {};
+            let imageFileName;
+
+            busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
+                console.log(fieldname, file, filename, encoding, mimetype);
+                if (mimetype !== 'image/jpeg' && mimetype !== 'image/png') {
+                    return res.status(400).json({ error: 'Wrong file type submitted' });
+                }
+                // my.image.png => ['my', 'image', 'png']
+                const imageExtension = filename.split('.')[filename.split('.').length - 1];
+                // 32756238461724837.png
+                imageFileName = `${Math.round(Math.random() * 1000000000000).toString()}.${imageExtension}`;
+                const filepath = path.join(os.tmpdir(), imageFileName);
+                imageToBeUploaded = { filepath, mimetype };
+                file.pipe(fs.createWriteStream(filepath));
+            });
+
+            // busboy.on('finish', async () => {
+            //     try{
+            //         await bucket
+            //         .upload(imageToBeUploaded.filepath, {
+            //             resumable: false,
+            //             metadata: {
+            //                 metadata: {
+            //                 contentType: imageToBeUploaded.mimetype
+            //                 }
+            //             }
+            //         })  
+            //         .then(() => {
+            //             const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
+            //             return db.doc(`/sellers/${req.user.username}`).update({ pic360Url });
+            //         })
+            //         .then(() => {
+            //             return res.json({ message: 'image uploaded successfully' });
+            //         })
+            //         .catch((err) => {
+            //             console.error(err);
+            //             return res.status(500).json({ error: 'something went wrong' });
+            //         });
+            //     }catch(err){
+            //         console.error(err);
+            //     }
+            // });
+            busboy.on('finish', async () => {
+                try {
+                    await bucket.upload(imageToBeUploaded.filepath, {
+                        resumable: false,
+                        metadata: {
+                            metadata: {
+                                contentType: imageToBeUploaded.mimetype
+                            }
+                        }
+                    });
+                    
+                    const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
+                    await db.doc(`/sellers/${req.user.username}`).update({ pic360Url });
+                    
+                    return res.json({ message: 'image uploaded successfully' });
+                } catch (err) {
+                    console.error(err);
+                    return res.status(500).json({ error: 'something went wrong' });
+                }
+            });
+            busboy.end(req.rawBody);
+        } else {
+            res.status(500).json({ error: 'you must have the require permissions' });
+        }
+    } catch (error) {
+        console.log(error);
+    }
+};
+
