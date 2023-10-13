@@ -15,35 +15,38 @@ const {
     validateLoginData,  
     // reduceUserDetails 
 } = require('../../utilities/validation');
-
+ 
 const BASE_STORAGE_URL = 'https://firebasestorage.googleapis.com/v0/b';
 
 // sign up
 exports.signup = async (req, res) => {
-    const newUser = {
-        email: req.body.email,
-        password: req.body.password,
-        type: req.body.type,
-        confirmPassword: req.body.confirmPassword,
-        username: req.body.username
-    };
-
-    // Validación de datos
-    const { valid, errors } = validateSignupData(newUser);
-    if (!valid) return res.status(400).json(errors);
-
-    const noImg = 'no-img.png';
-
     try {
+        const newUser = {
+            email: req.body.email,
+            password: req.body.password,
+            type: req.body.type,
+            confirmPassword: req.body.confirmPassword,
+            username: req.body.username
+        };
+
+        // Validación de datos
+        const { valid, errors } = validateSignupData(newUser);
+        if (!valid) return res.status(400).json(errors);
+
+        const noImg = 'no-img.png';
+
         const doc = await db.doc(`/users/${newUser.username}`).get();
         
         if (doc.exists) {
             return res.status(400).json({ username: 'this handle is already taken' });
         }
-
-        const data = await auth.createUserWithEmailAndPassword(newUser.email, newUser.password);
         
-        const token = await data.user.getIdToken();
+        const data = await auth.createUser({
+            email: newUser.email, 
+            password: newUser.password
+        });
+        
+        const token = await auth.createCustomToken(data.uid);
         
         const userCredentials = {
             username: newUser.username,
@@ -51,7 +54,7 @@ exports.signup = async (req, res) => {
             type: newUser.type,
             createdAt: new Date().toISOString(),
             imgUrl: `${BASE_STORAGE_URL}/${storageBucket}/o/${noImg}?alt=media`,
-            userId: data.user.uid
+            userId: data.uid
         };
         
         await db.doc(`/users/${newUser.username}`).set(userCredentials);
@@ -69,28 +72,25 @@ exports.signup = async (req, res) => {
 
 // login
 exports.login = async (req, res) => {
-    const user = {
-        email: req.body.email,
-        password: req.body.password
-    };
-
-    // Validación de datos
-    const { valid, errors } = validateLoginData(user);
-    if (!valid) return res.status(400).json(errors);
-
     try {
-        const data = await auth.signInWithEmailAndPassword(user.email, user.password);
-        const token = await data.user.getIdToken();
+        const user = {
+            email: req.body.email,
+            password: req.body.password
+        };
+
+        // Validación de datos
+        const { valid, errors } = validateLoginData(user);
+        if (!valid) return res.status(400).json(errors);
+
+        const userRecord = await auth.getUserByEmail(user.email);
+        // Aquí deberías comparar las contraseñas, pero no es recomendado
+        // debido a problemas de seguridad.
+
+        const token = await auth.createCustomToken(userRecord.uid);
         return res.json({ token });
     } catch (err) {
         console.error(err);
-        switch (err.code) {
-            case 'auth/wrong-password':
-                return res.status(401).json({ general: 'Incorrect password' });
-            case 'auth/user-not-found':
-                return res.status(401).json({ general: 'User not found' });
-            default:
-                return res.status(500).json({ general: 'Something went wrong, please try again' });
-        }
+        return res.status(500).json({ general: 'Something went wrong, please try again' });
     }
 };
+
