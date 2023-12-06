@@ -1,14 +1,19 @@
 // FIREBASE
 // functions
-const {onRequest} = require("firebase-functions/v2/https");
+const { onRequest } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
 // db
 const { 
+  admin,
   auth,
   db,  
   storage,
+  functions
 } = require('./firebase/admin')
 
 // EXPRESS
+// const express = require('express');
+// const app = express()
 const app = require('express')()
 
 // CORS
@@ -16,6 +21,7 @@ const cors = require('cors')
 app.use(cors({ origin: true }))
 
 // MIDDLEWARES
+// app.use(express.json());
 // middleware for auth
 const firebaseAuth = require('./firebase/firebaseAuth')
 // middleware for coords of statics
@@ -28,14 +34,14 @@ const coordsOfSellers = require('./utilities/coordsOfSellers')
 //   login,  
 // } = require('./handlers/users/users');
 
-// // showrooms
+// showrooms
 // const {
 //   getShowrooms,
 //   getShowroom,
 //   showrooms,
 //   updateShowroom,
-//   deleteShowroom
-// } = require('./handlers/showrooms/showrooms');
+//   deleteShowroom,
+// } = require('./handlers/showRooms/showRooms');
 
 // // users
 // const {
@@ -57,41 +63,44 @@ const {
   // localImage360
 } = require('./handlers/sellers/sellers');
 
-// // products
-// const {
-//   getProducts,
-//   getProduct,
-//   products,
-//   updateProduct,
-//   deleteProduct,
-//   images,
-//   csv
-// } = require('./handlers/products/products');
+// products
+const {
+  // getProducts,
+  // getProduct,
+  // products,
+  // updateProduct,
+  // deleteProduct,
+  // images,
+  xlsx
+} = require('./handlers/products/products');
 
-// // buyers
-// const {
+// buyers
+const {
 //   getBuyers,
 //   getBuyer,
-//   buyers,
+  buyers,
 //   updateBuyer,
 //   deleteBuyer
-// } = require('./handlers/buyers/buyers');
+} = require('./handlers/buyers/buyers');
 
-// // queries
-// const {
+// queries
+const {
 //   getQueries,
 //   getQuery,
-//   queries,
+  queries,
 //   getQueriesByUser,
 //   getQueryByUser,
 //   updateQuery,
 //   deleteQuery
-// } = require('./handlers/queries/queries');
+} = require('./handlers/queries/queries');
 
 // //////////////////////////////////////////// +++++++ API REST ROUTES +++++++ ///////////////////////////////////////////
 
-// // API Version
+// API Version
 const apiVersion = "v1"
+
+// Set the maximum instances to 10 for all functions
+setGlobalOptions({ maxInstances: 10 });
 
 // test
 app.get(`/${apiVersion}/test`, firebaseAuth, (req, res) => {
@@ -140,7 +149,7 @@ app.get(`/${apiVersion}/test`, firebaseAuth, (req, res) => {
 // app.delete(`/${apiVersion}/users/me`, firebaseAuth, deleteUser);
 
 
-// /* SELLERS */
+/* SELLERS */
 // // super admin
 // // 1-GET /sellers: Obtiene todos los vendedores.
 // app.get(`/${apiVersion}/sellers`, firebaseAuth, getSellers);
@@ -155,12 +164,12 @@ app.post(`/${apiVersion}/sellers`, firebaseAuth, sellers);
 // // 5-DELETE /sellers/:id: Elimina un vendedor específico.
 // app.delete(`/${apiVersion}/sellers/:sellerId`, firebaseAuth, deleteSeller);
 // 6-POST /sellers/:sellerId/coords: Para agregar coordenadas a un vendedor.
-app.post(`/${apiVersion}/sellers/:sellerId/coords`, firebaseAuth, coords);
+app.post(`/${apiVersion}/sellers/coords`, firebaseAuth, coords);
 // // 7-POST /sellers/:sellerId/images/local360: Para agregar una imagen 360 del local en un vendedor.
 // app.post(`/${apiVersion}/sellers/:sellerId/images/local360`, firebaseAuth, localImage360);
 
 
-// /* PRODUCTS */
+/* PRODUCTS */
 // // super admin
 // // 1-GET /products: Obtiene todos los productos.
 // app.get(`/${apiVersion}/products`, firebaseAuth, getProducts);
@@ -176,11 +185,11 @@ app.post(`/${apiVersion}/sellers/:sellerId/coords`, firebaseAuth, coords);
 // app.delete(`/${apiVersion}/products/:productId`, firebaseAuth, deleteProduct);
 // // 6-POST /products/:productId/images: Para agregar imagenes a un producto.
 // app.post(`/${apiVersion}/products/:productId/images`, firebaseAuth, images);
-// // 7-POST /products/csv: Para agregar productos a través de un archivo CSV.
-// app.post(`/${apiVersion}/products/csv`, firebaseAuth, coordsOfSellers, csv);
+// 7-POST /products/csv: Para agregar productos a través de un archivo CSV.
+app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx`, firebaseAuth, coordsOfSellers, xlsx);
 
 
-// /* BUYERS */
+/* BUYERS */
 // // super admin
 // // 1-GET /buyers: Obtiene todos los compradores.
 // app.get(`/${apiVersion}/buyers`, firebaseAuth, getBuyers);
@@ -188,15 +197,15 @@ app.post(`/${apiVersion}/sellers/:sellerId/coords`, firebaseAuth, coords);
 // app.get(`/${apiVersion}/buyers/:buyerId`, firebaseAuth, getBuyer);
 
 // // user admin
-// // 3-POST /buyers: Crea un nuevo comprador.
-// app.post(`/${apiVersion}/buyers`, firebaseAuth, buyers);
+// 3-POST /buyers: Crea un nuevo comprador.
+app.post(`/${apiVersion}/buyers`, firebaseAuth, buyers);
 // // 4-PUT /buyers/:id: Actualiza un comprador específico.
 // app.put(`/${apiVersion}/buyers/:buyerId`, firebaseAuth, updateBuyer);
 // // 5-DELETE /buyers/:id: Elimina un comprador específico.
 // app.delete(`/${apiVersion}/buyers/:buyerId`, firebaseAuth, deleteBuyer);
 
 
-// /* QUERIES */
+/* QUERIES */
 // // super admin
 // // 1-GET /queries: Obtiene todas las consultas realizadas.
 // app.get(`/${apiVersion}/queries`, firebaseAuth, getQueries);
@@ -204,8 +213,8 @@ app.post(`/${apiVersion}/sellers/:sellerId/coords`, firebaseAuth, coords);
 // app.get(`/${apiVersion}/queries/:queryId`, firebaseAuth, getQuery);
 
 // // user admin
-// // 3-POST /queries: Almacena una nueva consulta hecha por un usuario.
-// app.post(`/${apiVersion}/queries`, firebaseAuth, queries);
+// 3-POST /queries: Almacena una nueva consulta hecha por un usuario.
+app.post(`/${apiVersion}/queries`, firebaseAuth, queries);
 // // 4-GET /queries: Obtiene todas las consultas hechas por un usuario.
 // app.get(`/${apiVersion}/queries`, firebaseAuth, getQueriesByUser);
 // // 5-GET /queries/:queryId: Obtiene una de las consultas hechas por un usuario.
@@ -235,4 +244,44 @@ app.post(`/${apiVersion}/sellers/:sellerId/coords`, firebaseAuth, coords);
 // export functions
 exports.api = onRequest(app);
 
+// triggers - sin testear despues de el ultimo cambio en el que se especifico solo entraran strings en el array de tags
+exports.updateShowRoomOnProductCreate = functions.firestore
+    .document('products/{productId}')
+    .onCreate(async (snap, context) => {
+        console.log('updateShowRoomOnProductCreate');
+        // Obtener los datos del producto recién creado
+        const newProduct = snap.data();
 
+        // Verificar si el campo 'tags' existe y es un array
+        if (newProduct.tags && Array.isArray(newProduct.tags)) {
+            try {
+                // ID del showroom a actualizar
+                const showRoomId = newProduct.showRoom;
+
+                // Referencia al documento del showroom
+                const showRoomRef = admin.firestore().doc(`showRooms/${showRoomId}`);
+
+                // Obtener el documento actual del showroom
+                const showRoomSnap = await showRoomRef.get();
+
+                if (showRoomSnap.exists) {
+                    const showRoomData = showRoomSnap.data();
+                    let currentTags = showRoomData.tags || [];
+
+                    // Convertir todos los tags a strings y filtrar tipos no deseados
+                    const newTags = newProduct.tags
+                        .map(tag => typeof tag === 'string' ? tag : tag.toString())
+                        .filter(tag => typeof tag === 'string' && !currentTags.includes(tag));
+
+                    if (newTags.length > 0) {
+                        currentTags = [...currentTags, ...newTags];
+                        await showRoomRef.update({ tags: currentTags });
+                    }
+                } else {
+                    console.log('Showroom no encontrado:', showRoomId);
+                }
+            } catch (error) {
+                console.error('Error al actualizar el showroom:', error);
+            }
+        }
+    });
