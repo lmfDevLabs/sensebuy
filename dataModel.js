@@ -74,6 +74,7 @@ const products = [
         taxonomy:{
 
         },
+        showRoom:"",
         tags:[],
         categories:[],
     }
@@ -95,24 +96,23 @@ const buyers = [
             hash:"",
             nameOfPoint:""
         },
-        liveFeed:{ // colors???????
-            matchQuality:0,
-            matrixDistance:0
+        liveFeed:{ 
+            matchQuality:{
+                color:"",
+                value:0
+            },
+            matrixDistance:{
+                color:"",
+                value:0
+            },
         },
-        // queries
-        docsQueriesIds:[],
-        onDocQueryId:"",
-        docIdSelectedOfProductsSuggestions:"",
-        
-        
+        // queries relations
+        queries:{
+            docsQueriesIds:[],
+            onDocQueryId:"",
+            docIdSelectedOfProductsSuggestions:"",
+        },
     }  
-]
-
-const productSuggestions = [
-    {
-        productId:"",
-        createdAt:Date(),
-    }
 ]
 
 const queries = [
@@ -134,3 +134,11 @@ const queries = [
         },
     }
 ]
+
+const productSuggestions = [
+    {
+        productId:"",
+        createdAt:Date(),
+    }
+]
+
