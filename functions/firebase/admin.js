@@ -23,6 +23,7 @@ try {
 const auth = admin.auth();
 const db = admin.firestore();
 const storage = admin.storage();
+const functions = require('firebase-functions');
 
 if (process.env.NODE_ENV === 'development') {
     try {
@@ -40,5 +41,6 @@ module.exports = {
     admin,
     auth,
     db,
-    storage 
+    storage,
+    functions
 };
