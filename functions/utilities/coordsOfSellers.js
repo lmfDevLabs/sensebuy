@@ -1,13 +1,16 @@
 // firebase
-const { db } = require('../../firebase');
+const { db } = require('../firebase/admin');
+// busboy
+const Busboy = require('busboy');
 
 module.exports = async (req, res, next) => {
     try { 
-        const userId = req.params.userId;
-        const sellerId = thingId.split("-").slice(2).toString();
+        //const data = JSON.parse(req.body); // Parsea el JSON, ya que viene como un string
+        // console.log({data});
+        //console.log('sellerId: ', data.sellerId);
 
         // Fetch data from Firestore
-        const doc = await db.doc(`/sellers/${sellerId}`).get();
+        const doc = await db.doc(`/sellers/${req.params.sellerId}`).get();
         
         // Check if document exists
         if (!doc.exists) {
@@ -16,13 +19,21 @@ module.exports = async (req, res, next) => {
         }
 
         // Extract and pass data to the next middleware
-        const coordsOfStatic = {
-            coords: doc.data().coords
+        const sellerData = {
+            coords: doc.data().coords,
+            companyData: doc.data().companyData
+
         };
-        res.locals.coordsData = coordsOfStatic;
+        console.log('sellerData: ', sellerData);
+        res.locals.coordsData = sellerData.coords;
+        res.locals.companyData = sellerData.companyData;
         return next();
     } catch (err) {
         console.error('Error while fetching seller data: ', err);
         return res.status(500).json({ error: 'Something went wrong' });
     }
 };
+
+
+
+
