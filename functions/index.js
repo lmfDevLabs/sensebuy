@@ -71,7 +71,8 @@ const {
   // updateProduct,
   // deleteProduct,
   // images,
-  xlsx
+  xlsx,
+  xlsx2
 } = require('./handlers/products/products');
 
 // buyers
@@ -87,7 +88,8 @@ const {
 const {
 //   getQueries,
 //   getQuery,
-  queries,
+  queriesOpenAI,
+  queriesOpenAIAndAlgolia,
 //   getQueriesByUser,
 //   getQueryByUser,
 //   updateQuery,
@@ -187,7 +189,8 @@ app.post(`/${apiVersion}/sellers/coords`, firebaseAuth, coords);
 // app.post(`/${apiVersion}/products/:productId/images`, firebaseAuth, images);
 // 7-POST /products/csv: Para agregar productos a través de un archivo CSV.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx`, firebaseAuth, coordsOfSellers, xlsx);
-
+// 8-POST /products/csv: Para agregar productos a través de un archivo CSV and embbeding stuff.
+app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx2`, firebaseAuth, coordsOfSellers, xlsx2);
 
 /* BUYERS */
 // // super admin
@@ -213,8 +216,10 @@ app.post(`/${apiVersion}/buyers`, firebaseAuth, buyers);
 // app.get(`/${apiVersion}/queries/:queryId`, firebaseAuth, getQuery);
 
 // // user admin
-// 3-POST /queries: Almacena una nueva consulta hecha por un usuario.
-app.post(`/${apiVersion}/queries`, firebaseAuth, queries);
+// 3-POST /queries: Almacena una nueva consulta hecha por un usuario a OpenAI.
+app.post(`/${apiVersion}/queries`, queriesOpenAI);
+// 3a-POST /queries: Almacena una nueva consulta hecha por un usuario a OpenAI y Algolia.
+app.post(`/${apiVersion}/queries2`, firebaseAuth, queriesOpenAIAndAlgolia);
 // // 4-GET /queries: Obtiene todas las consultas hechas por un usuario.
 // app.get(`/${apiVersion}/queries`, firebaseAuth, getQueriesByUser);
 // // 5-GET /queries/:queryId: Obtiene una de las consultas hechas por un usuario.
