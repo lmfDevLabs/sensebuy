@@ -15,9 +15,9 @@ const {
     reduceSeller,
     validateCoordsData
 } = require('../../utilities/validation');
-
-// post products in statics with only a .csv file
-exports.sellers = async (req, res) => {
+ 
+// Crea un nuevo vendedor asociado aun usuario tipo seller.
+exports.sellers = async (req, res) => { 
     try {
         // check if the user can post on sellers collection
         if(req.user.type === "seller"){
