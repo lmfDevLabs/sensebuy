@@ -72,7 +72,8 @@ const {
   // deleteProduct,
   // images,
   xlsx,
-  xlsx2
+  xlsx2,
+  xlsx3
 } = require('./handlers/products/products');
 
 // buyers
@@ -191,7 +192,7 @@ app.post(`/${apiVersion}/sellers/coords`, firebaseAuth, coords);
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx`, firebaseAuth, coordsOfSellers, xlsx);
 // 8-POST /products/csv: Para agregar productos a través de un archivo CSV and embbeding stuff.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx2`, firebaseAuth, coordsOfSellers, xlsx2);
-
+app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, firebaseAuth, coordsOfSellers, xlsx3);
 /* BUYERS */
 // // super admin
 // // 1-GET /buyers: Obtiene todos los compradores.
@@ -290,3 +291,11 @@ exports.updateShowRoomOnProductCreate = functions.firestore
             }
         }
     });
+
+// Escucha los eventos de escritura en la colección "embeddings"
+exports.listeAnyNewEmbeddingOnShowRoomCollection = functions.firestore
+    .document(`showRooms/lsmkexTISq5JzCmIMUi5/embeddings/{embeddingId}`)
+    .onCreate(async(snap,context) => {
+        console.log('New embedding added to the showroom');
+        
+});

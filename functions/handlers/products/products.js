@@ -8,9 +8,13 @@ const Busboy = require('busboy');
 // firebase 
 const { db, admin, storage } = require('../../firebase/admin');
 const bucket = storage.bucket();
-// const bucket = admin.storage().bucket(); 
 // open ai
 const { OpenAI } = require('openai');
+// langchain
+const { Chroma } = require("@langchain/community/vectorstores/chroma");
+// const { ChromaClient } = require("chromadb");
+
+
 
 // post products with only a .csv file
 exports.xlsx = async (req, res) => {
@@ -255,48 +259,145 @@ exports.xlsx = async (req, res) => {
 // post products with only a .csv file and do the embbedings part
 exports.xlsx2 = async (req, res) => {
 
-    // receive the file
-    // upload file to firestore
-    const uploadFileToBucket = async (filepath, mimetype) => {
-        console.log('uploadFileToBucket');
-        await bucket.upload(filepath, {
-            resumable: false,
-            metadata: {
-                metadata: {
-                    contentType: mimetype
+    // main
+    try {
+        if(req.user.type === "seller"){
+            console.log("Hi seller");
+            // vars
+            const busboy = Busboy({ headers: req.headers });
+            const csvFileExtension = "csv";
+            const newFileName = `${req.params.showRoomId} - `;
+            let filepath = path.join(os.tmpdir(), newFileName);
+            let mimetype;
+            // on file
+            busboy.on('file', (fieldname, file, filename, encoding, mime) => {
+                // if(fieldname !== "xlsxFile" || !['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'].includes(mime)) 
+                // if(fieldname !== "csvFile" || mime !== 'text/csv')
+                if(fieldname !== "xlsxFile" && mime !== 'multipart/form-data')
+                {
+                    console.log('File type or fieldname is not supported:', fieldname, mime);
+                    return; // Ignora el archivo si no coincide con los criterios
                 }
-            }
-        });
-    };
+                filepath += filename.filename
+                mimetype = mime;
+                file.pipe(fs.createWriteStream(filepath));
+            });
+            // on finish    
+            busboy.on('finish', async () => {
+                try {
+                    // data from req
+                    const sellerId = req.params.sellerId;
+                    
+                    // ** methods
+                    // upload file to gcp bucket
+                    await uploadFileToBucket(filepath, mimetype);
+                    // convert .xls en .csv
+                    const csvOfProductsFilepath = await convertExcelToCSVAndCreatePath(filepath);
+                    // extract data from csv
+                    const extractDataFromCSVFile = await extractDataFromCSV(csvOfProductsFilepath);
+                    // add data of products to firestore
+                    const productsToFirestore = await addProductsToFirestore(extractDataFromCSVFile);
+                    // process csv and generate embeddings
+                    const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(extractDataFromCSV,sellerId);
+                    // save embeddings on firestore
+                    const embbedingsToFirestore = saveEmbeddingsOnFirestore(createEmbeddingsOfProducts);
+                    // 
+                    const csvOfEmbeddingsToBucket = createCSVToEmbeddings(createEmbeddingsOfProducts,filepath,mimetype);
+                    //const chromaSaveProccess = saveEmbeddingsOnChromaDB(embeddings);
+                    // Sube el archivo CSV al bucket de GCP
+                    uploadFileToBucket(csvFilePath,mimetype);
+                    // erase temp file
+                    fs.unlink(filepath, (err) => { // Elimina el archivo temporal
+                        if (err) console.error('Error removing temp file:', err);
+                    });
+                    // send response
+                    res.json({ message: 'XLSX file was processed and uploaded successfully' });
+                } catch (error) {
+                    console.error('Error inside busboy finish:', error);
+                    res.status(500).json({ error: error.message });
+                }
+            });
+            // on error
+            busboy.on('error', error => console.log('Busboy error:', error));
+            // wait for the file to be uploaded
+            await new Promise((resolve, reject) => {
+                busboy.on('file', resolve);
+                busboy.on('finish', resolve);
+                busboy.on('error', reject);
+                busboy.end(req.rawBody);
+            });
+        } else {
+            res.status(403).json({ error: 'You must have the required permissions' });
+        }
+    } catch (err) {
+        console.error('Global error:', err);
+        res.status(500).json({ error: err.message });
+    }
+}
 
-    // convert excel to csv
-    const convertExcelToCSV = async (filepath) => {
+
+
+exports.xlsx3 = async (req, res) => {
+
+    // ** Cloud storage
+    // upload file to bucket gcp
+    const uploadFileToBucket = async (filepath, mimetype) => {
         try {
-            console.log('convertExcelToCSV');
+            console.log('uploadFileToBucket');
+            await bucket.upload(filepath, {
+                resumable: false,
+                metadata: {
+                    metadata: {
+                        contentType: mimetype
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error uploadFileToBucket:', error);
+        }
+    };
+    // Función para descargar el archivo CSV desde Cloud Storage
+    const downloadCsvFile = async (fileName) => {
+        
+        try {
+            console.log('downloadCsvFile');
+            // Descarga el archivo CSV desde Cloud Storage
+            let showRoomFileTempPath = os.tmpdir() + fileName
+            await bucket.file(fileName).download({ destination: fs.createWriteStream(showRoomFileTempPath) });
+            return showRoomFileTempPath;
+        } catch (error) {
+            console.error('Error downloadCsvFile:', error);
+        }
+    }
+
+    // ** .CSV data and files
+    // convert excel to csv
+    const convertExcelToCSVAndCreateNewPath = async (filepath) => {
+        try {
+            console.log('convertExcelToCSVAndCreateNewPath');
             const xlsx = require('xlsx');
-    
+
             // Lee el archivo Excel
             const workbook = xlsx.readFile(filepath);
-    
+
             // Obtiene el nombre de la primera hoja
             const firstSheetName = workbook.SheetNames[0];
-    
+
             // Convierte la hoja a formato CSV
             const csvData = xlsx.utils.sheet_to_csv(workbook.Sheets[firstSheetName]);
-    
+
             // Crea el nuevo nombre del archivo, reemplazando la extensión
             const newFilepath = filepath.replace(/\.(xls|xlsx)$/, '.csv');
-    
+
             // Escribe el archivo CSV
             fs.writeFileSync(newFilepath, csvData);
-    
+
             return newFilepath;
         } catch (error) {
-            console.error('Error converting Excel to CSV:', error);
+            console.error('Error convertExcelToCSVAndCreateNewPath:', error);
             throw error;
         }
     };
-
     // extract csv data
     const extractDataFromCSV = (filepath) => {
         console.log('extractDataFromCSV');
@@ -331,49 +432,88 @@ exports.xlsx2 = async (req, res) => {
                     dataObject.push(car);
                 })
                 .on('end', () => resolve(dataObject))
-                .on('error', reject);
+                .on('error extractDataFromCSV:', reject);
         });
     };
+    // update global csv file
+    const updateGlobalCsvFile = async (embeddingsFilePath,embeddings) => {
+        
+        try{
+            // print
+            console.log('updateGlobalCsvFile:');
+            fs.writeFileSync(embeddingsFilePath, embeddings);
+        }catch(err){
+            console.error('Error updateGlobalCsvFile', err);
+        }
+    };
 
-    // firebase
+    // ** Firebase
     // add data to fb
     const addProductsToFirestore = async (products) =>  {
-        const MAX_BATCH_SIZE = 500; // Firestore batch write limit
-        let batch = db.batch();
         const commitBatches = [];
-    
-        products.forEach((product, index) => {
-            const docRef = db.collection('products').doc(); // Crea un nuevo documento para cada producto
-            let dataObject = {
-                selleData:{
-                    sellerId:req.params.sellerId,
-                    companyName:res.locals.companyData.name
-                },
-                coords:res.locals.coordsData,
-                createdAt:new Date().toISOString(),
-                ...product
-            }
-            // pass data to the doc
-            batch.set(docRef, dataObject);
-    
-            // Si alcanzamos el límite del batch o es el último elemento, preparamos para enviar
-            if ((index + 1) % MAX_BATCH_SIZE === 0 || index === products.length - 1) {
-                commitBatches.push(batch.commit()); // Añade la promesa del commit a la lista
-                batch = db.batch(); // Reinicia el batch para el siguiente grupo de documentos
-            }
-        });
-    
+        try {
+            console.log('addProductsToFirestore');
+            const MAX_BATCH_SIZE = 500; // Firestore batch write limit
+            let batch = db.batch();
+            // Loop over products
+            products.forEach((product, index) => {
+                const docRef = db.collection('products').doc(); // Crea un nuevo documento para cada producto
+                let dataObject = {
+                    selleData:{
+                        sellerId:req.params.sellerId,
+                        companyName:res.locals.companyData.name
+                    },
+                    coords:res.locals.coordsData,
+                    createdAt:new Date().toISOString(),
+                    ...product
+                }
+                // pass data to the doc
+                batch.set(docRef, dataObject);
+
+                // Si alcanzamos el límite del batch o es el último elemento, preparamos para enviar
+                if ((index + 1) % MAX_BATCH_SIZE === 0 || index === products.length - 1) {
+                    commitBatches.push(batch.commit()); // Añade la promesa del commit a la lista
+                    batch = db.batch(); // Reinicia el batch para el siguiente grupo de documentos
+                }
+            });
+        } catch (error) {
+            console.error('Error addProductsToFirestore:', error);
+        }
+
         // Espera a que todos los batches se hayan enviado
         await Promise.all(commitBatches);
     }
+    // save embeddings in firestore
+    const saveEmbeddingsOnFirestore = async (embeddings) => {
+        // Aquí deberías guardar los embeddings en Vertex AI
+        console.log('saveEmbeddingsOnFirestore:');
+        // Aquí deberías guardar los embeddings en Firestore
+        const commitBatches = [];
+        const batch = db.batch();
+        try{
+            const embeddingsCollectionRef = db
+                .collection('showRooms')
+                .doc(req.params.showRoomId)
+                .collection('embeddings');
 
-    // embeddigs
+            embeddings.forEach((embedding) => {
+                const docRef = embeddingsCollectionRef.doc(); // Create a new document for each embedding
+                batch.set(docRef, embedding);
+            });
+        }catch(err){
+            console.error('Error saveEmbeddingsOnFirestore:', err);
+        }
+        commitBatches.push(batch.commit());
+    };
+
+    // ** Embeddigs
     // remueve las claves que no queremos en el embedding
     const prepareProductTextForEmbedding = (productData) => {
         try {
+            console.log('prepareProductTextForEmbedding');
             const excludedKeys = ['pics', 'pdf']; // Claves que quieres excluir
             let textParts = [];
-    
+
             // Recorrer todas las claves y valores del objeto productData
             for (const [key, value] of Object.entries(productData)) {
                 // Comprobar si la clave no está excluida y el valor no es nulo ni vacío
@@ -384,23 +524,25 @@ exports.xlsx2 = async (req, res) => {
                     textParts.push(`${readableKey}: ${value}`);
                 }
             }
-    
+
             // Unir todas las partes con un punto y espacio como separador.
             return textParts.join('. ');
         } catch (error) {
-            console.error('Error preparing product text for embedding:', error);
+            console.error('Error prepareProductTextForEmbedding:', error);
             return ''; // Devuelve una cadena vacía en caso de error.
         }
     };
-    
     // Función para obtener embeddings con OpenAI
     const getEmbeddingsFromOpenAI = async (text) => {
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
-        // print
-        console.log('getEmbeddingsFromOpenAI:', text);
+        
         try {
+            // print
+            console.log('getEmbeddingsFromOpenAI:');
+            // Instancia de OpenAI
+            const openai = new OpenAI({
+                apiKey: process.env.OPENAI_API_KEY,
+            });
+            // Obtiene el embedding del texto
             const response = await openai.embeddings.create({
                 model: "text-embedding-3-small",
                 input: text,
@@ -410,16 +552,17 @@ exports.xlsx2 = async (req, res) => {
             // console.log('Embedding:', response);
             return response // Ajusta según la estructura de la respuesta
         } catch (error) {
-            console.error('Error al obtener el embedding:', error);
+            console.error('Error getEmbeddingsFromOpenAI:', error);
             return null; // O maneja el error según prefieras
         }
     };
-
     // Función para procesar el CSV y generar embeddings
     const processCSVAndGenerateEmbeddings = async (data,sellerId) => {
-        // const productsData = await extractDataFromCSV(filepath);
-        const embeddings = [];
-        try {   
+        try {  
+            // print 
+            console.log('processCSVAndGenerateEmbeddings:');
+            // Array para almacenar los embeddings
+            const embeddings = [];
             // Procesa cada producto y obtiene su embedding
             for (const productData of data) {
                 // console.log('Product data:', productData);
@@ -466,92 +609,126 @@ exports.xlsx2 = async (req, res) => {
             
             return embeddings; // Retorna el embedding
         } catch (error) {
-            console.error('Error processing CSV and generating embeddings:', error);
+            console.error('Error processCSVAndGenerateEmbeddings:', error);
         }
     };
-
-    // Firebase and GCP
-    // save embeddings in vertex ai de gcp
-    const saveEmbeddingsOnFirestoresAndVertexAI = async (embeddings) => {
-        // Aquí deberías guardar los embeddings en Vertex AI
-        console.log('saveEmbeddingsToVertexAI:', embeddings);
-        // Aquí deberías guardar los embeddings en Firestore
-        try{
-            const batch = db.batch();
-            const commitBatches = [];
-            const embeddingsCollectionRef = db
-                .collection('showRooms')
-                .doc(req.params.showRoomId)
-                .collection('embeddings');
-
-            embeddings.forEach((embedding) => {
-                const docRef = embeddingsCollectionRef.doc(); // Create a new document for each embedding
-                batch.set(docRef, embedding);
+    // make array with embeddings to save on bucket
+    const createArrayWithEmbeddings = async (embeddings) => {
+        try {
+            console.log('createArrayWithEmbeddings:');
+            let csvContent = "embedding\n"; // Encabezado del CSV
+            // Procesa cada embedding y agrégalo al archivo CSV
+            embeddings.forEach((item) => {
+                // Asegúrate de que item.embedding.data sea un array y tenga elementos antes de continuar
+                if (Array.isArray(item.embedding.data) && item.embedding.data.length > 0) {
+                    // Accede al primer elemento de data (o itera a través de todos si es necesario)
+                    const embeddingStr = item.embedding.data.join(','); // Convierte el array del embedding a string
+                    csvContent += `${embeddingStr}\n`;
+                } else {
+                    console.error('Error: item.embedding.data is not an array or is empty', item.embedding.data);
+                }
             });
-
-            commitBatches.push(batch.commit());
-            
-        }catch(err){
-            console.error('Error saving embeddings to Firestore:', err);
+        } catch (err) {
+            console.error('Error createArrayWithEmbeddings:', err);
         }
-    };
+    }
 
-    // main
-    try {
+    try{
+        // check if the user can post on products collection
         if(req.user.type === "seller"){
-            console.log("Hi seller");
+            // req params
+            let sellerId = req.params.sellerId; 
+            let showRoomId = req.params.showRoomId
+            // busboy
             const busboy = Busboy({ headers: req.headers });
-            let filepath;
-            let mimetype;
+            // temp path
+            let tempFilePath;
+            // paths gcp
+            let showRoomPathFolder = `gs://sensebuy-e8add.appspot.com/${showRoomId}`;
+            let showRoomCsvFilePath = `gs://sensebuy-e8add.appspot.com/${showRoomId}/${showRoomId}_embedding.json`
+            
+            // file
+            let mimetype = '';
+
             // on file
             busboy.on('file', (fieldname, file, filename, encoding, mime) => {
-                // if(fieldname !== "xlsxFile" || !['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'].includes(mime)) 
-                // if(fieldname !== "csvFile" || mime !== 'text/csv')
+                // if (mime !== 'text/csv' && !mime.includes('spreadsheetml')) 
                 if(fieldname !== "xlsxFile" && mime !== 'multipart/form-data')
                 {
-                    console.log('File type or fieldname is not supported:', fieldname, mime);
-                    return; // Ignora el archivo si no coincide con los criterios
+                    console.log('File type not supported:', mime);
+                    return; // Ignora el archivo si no es CSV o XLSX
                 }
-                const newFilename = `${req.params.sellerId}-${Date.now()}-${filename}`;
-                filepath = path.join(os.tmpdir(), newFilename);
+                const newFileName = `${req.params.sellerId} - ${filename.filename}`;
+                tempFilePath = path.join(os.tmpdir(), newFileName);
                 mimetype = mime;
-                file.pipe(fs.createWriteStream(filepath));
+                file.pipe(fs.createWriteStream(tempFilePath));
             });
-            // on finish    
+            
+            // on finish
             busboy.on('finish', async () => {
                 try {
-                    await uploadFileToBucket(filepath, mimetype);
-                    const csvFilepath = await convertExcelToCSV(filepath);
-                    const dataObjectData = await extractDataFromCSV(csvFilepath);
-                    const db = await addProductsToFirestore(dataObjectData);
-                    const sellerId = req.params.sellerId;
-                    const embeddings = await processCSVAndGenerateEmbeddings(dataObjectData,sellerId);
-                    const embbedingSaveProccess = saveEmbeddingsOnFirestoresAndVertexAI(embeddings);
-                    // erase temp file
-                    fs.unlink(filepath, (err) => { // Elimina el archivo temporal
-                        if (err) console.error('Error removing temp file:', err);
-                    });
-                    // send response
-                    res.json({ message: 'XLSX file was processed and uploaded successfully' });
+                    // ** methods
+                    // upload file to gcp bucket
+                    await uploadFileToBucket(tempFilePath, mimetype)
+                    // convert .xls en .csv
+                    const csvOfProductsFilepath = await convertExcelToCSVAndCreateNewPath(tempFilePath);
+                    // extract data from csv
+                    const extractDataFromCSVFile = await extractDataFromCSV(csvOfProductsFilepath);
+                    // add data of products to firestore
+                    const productsToFirestore = await addProductsToFirestore(extractDataFromCSVFile);
+                    // process csv and generate embeddings
+                    const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(extractDataFromCSVFile, sellerId);
+                    // check for if embeddings exist
+                    if(createEmbeddingsOfProducts.length > 0) {
+                        // save embeddings on firestore
+                        const embbedingsToFirestore = await saveEmbeddingsOnFirestore(createEmbeddingsOfProducts);
+                        // save embeddings on bucket
+                        const arrayOfEmbeddings = createArrayWithEmbeddings(createEmbeddingsOfProducts);
+                        // download global csv file
+                        const fileName = `${showRoomId}_embedding.json`
+                        const globalCsvFilePath = await downloadCsvFile(fileName);
+                        // update global csv file
+                        const updateGlobalCsv = await updateGlobalCsvFile(globalCsvFilePath,arrayOfEmbeddings);
+                        // upload global csv file
+                        let mimetype = "text/csv"
+                        // Sube el archivo CSV al bucket de GCP
+                        await uploadFileToBucket(globalCsvFilePath, mimetype);
+                        // Responde al cliente
+                        res.json({ message: 'CSV file processed and uploaded successfully' });
+                    } else {
+                        return res.status(400).json({ error: 'There´s any embeddnigs available to save' });
+                    }
+                    // Responde al cliente
+                    // res.json({ message: 'File processed and uploaded successfully' });
                 } catch (error) {
                     console.error('Error inside busboy finish:', error);
                     res.status(500).json({ error: error.message });
+                } finally {
+                    // Limpieza: elimina el archivo temporal
+                    fs.unlink(tempFilePath, (err) => {
+                        if (err) console.error('Error removing temp file:', err);
+                    });
                 }
             });
+
             // on error
             busboy.on('error', error => console.log('Busboy error:', error));
-            // wait for the file to be uploaded
+
+            // wait for the processes to finish
             await new Promise((resolve, reject) => {
                 busboy.on('file', resolve);
                 busboy.on('finish', resolve);
                 busboy.on('error', reject);
                 busboy.end(req.rawBody);
             });
+            req.pipe(busboy);
         } else {
+            // responde al cliente
             res.status(403).json({ error: 'You must have the required permissions' });
         }
-    } catch (err) {
+    }
+    catch (err) {
         console.error('Global error:', err);
         res.status(500).json({ error: err.message });
     }
-}
+};
