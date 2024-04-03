@@ -1,22 +1,35 @@
+// node modules
+const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const fs = require('fs');
-// csv
-const csv = require('csv-parser');
 // libs
 const Busboy = require('busboy');
-// firebase 
-const { db, admin, storage } = require('../../firebase/admin');
-const bucket = storage.bucket();
-// open ai
-const { OpenAI } = require('openai');
-// langchain
-const { Chroma } = require("@langchain/community/vectorstores/chroma");
-// const { ChromaClient } = require("chromadb");
+// utils
+// cloud storage
+const {
+    uploadFileToCloudStorage,
+    downloadFileOfCloudStorage,
+} = require('../../utilities/cloudStorage');
+// csv
+const {
+    convertExcelToCSV,
+    extractDataFromCSV,
+    updateGlobalCsvFile
+} = require('../../utilities/csv');
+// firestore
+const {
+    addDataToFirestore,
+    saveEmbeddingsOnFirestore
+} = require('../../utilities/firestore');
+// embedings
+const {
+    processCSVAndGenerateEmbeddings,
+    createArrayWithEmbeddings,
+    
+} = require('../../utilities/embeddings');
 
 
-
-// post products with only a .csv file
+//post products with only a .csv file
 exports.xlsx = async (req, res) => {
     
     // upload file to firestore
@@ -335,305 +348,10 @@ exports.xlsx2 = async (req, res) => {
     }
 }
 
-
-
+// post products with only a .csv file and do the complete embbedings part
 exports.xlsx3 = async (req, res) => {
 
-    // ** Cloud storage
-    // upload file to bucket gcp
-    const uploadFileToBucket = async (filepath, mimetype) => {
-        try {
-            console.log('uploadFileToBucket');
-            await bucket.upload(filepath, {
-                resumable: false,
-                metadata: {
-                    metadata: {
-                        contentType: mimetype
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Error uploadFileToBucket:', error);
-        }
-    };
-    // Función para descargar el archivo CSV desde Cloud Storage
-    const downloadCsvFile = async (fileName) => {
-        
-        try {
-            console.log('downloadCsvFile');
-            // Descarga el archivo CSV desde Cloud Storage
-            let showRoomFileTempPath = os.tmpdir() + fileName
-            await bucket.file(fileName).download({ destination: fs.createWriteStream(showRoomFileTempPath) });
-            return showRoomFileTempPath;
-        } catch (error) {
-            console.error('Error downloadCsvFile:', error);
-        }
-    }
-
-    // ** .CSV data and files
-    // convert excel to csv
-    const convertExcelToCSVAndCreateNewPath = async (filepath) => {
-        try {
-            console.log('convertExcelToCSVAndCreateNewPath');
-            const xlsx = require('xlsx');
-
-            // Lee el archivo Excel
-            const workbook = xlsx.readFile(filepath);
-
-            // Obtiene el nombre de la primera hoja
-            const firstSheetName = workbook.SheetNames[0];
-
-            // Convierte la hoja a formato CSV
-            const csvData = xlsx.utils.sheet_to_csv(workbook.Sheets[firstSheetName]);
-
-            // Crea el nuevo nombre del archivo, reemplazando la extensión
-            const newFilepath = filepath.replace(/\.(xls|xlsx)$/, '.csv');
-
-            // Escribe el archivo CSV
-            fs.writeFileSync(newFilepath, csvData);
-
-            return newFilepath;
-        } catch (error) {
-            console.error('Error convertExcelToCSVAndCreateNewPath:', error);
-            throw error;
-        }
-    };
-    // extract csv data
-    const extractDataFromCSV = (filepath) => {
-        console.log('extractDataFromCSV');
-        return new Promise((resolve, reject) => {
-            const dataObject = [];
-            fs.createReadStream(filepath)
-                .pipe(csv())
-                .on('data', (row) => {
-                    let car = {};
-                    for (const key in row) {
-                        // to trim the values
-                        let value = row[key].trim();
-                        // to lower case keys and trim the values
-                        let newKey = key.toLowerCase().trim();
-                        // Convierte "null" a null
-                        if (value.toLowerCase() === "null") {
-                            car[newKey] = null;
-                        } 
-                        // Manejo especial para el campo "price"
-                        else if (newKey === 'price' && /^[0-9.]+$/.test(value)) {
-                            car[newKey] = parseInt(value.replace(/\./g, ''), 10);
-                        } 
-                        // Convierte números con puntos (decimales)
-                        else if (/^-?\d+(\.\d+)?$/.test(value)) {
-                            car[newKey] = parseFloat(value);
-                        }
-                        // convierte a minúsculas
-                        else {
-                            car[newKey] = value.toLowerCase();
-                        }
-                    }
-                    dataObject.push(car);
-                })
-                .on('end', () => resolve(dataObject))
-                .on('error extractDataFromCSV:', reject);
-        });
-    };
-    // update global csv file
-    const updateGlobalCsvFile = async (embeddingsFilePath,embeddings) => {
-        
-        try{
-            // print
-            console.log('updateGlobalCsvFile:');
-            fs.writeFileSync(embeddingsFilePath, embeddings);
-        }catch(err){
-            console.error('Error updateGlobalCsvFile', err);
-        }
-    };
-
-    // ** Firebase
-    // add data to fb
-    const addProductsToFirestore = async (products) =>  {
-        const commitBatches = [];
-        try {
-            console.log('addProductsToFirestore');
-            const MAX_BATCH_SIZE = 500; // Firestore batch write limit
-            let batch = db.batch();
-            // Loop over products
-            products.forEach((product, index) => {
-                const docRef = db.collection('products').doc(); // Crea un nuevo documento para cada producto
-                let dataObject = {
-                    selleData:{
-                        sellerId:req.params.sellerId,
-                        companyName:res.locals.companyData.name
-                    },
-                    coords:res.locals.coordsData,
-                    createdAt:new Date().toISOString(),
-                    ...product
-                }
-                // pass data to the doc
-                batch.set(docRef, dataObject);
-
-                // Si alcanzamos el límite del batch o es el último elemento, preparamos para enviar
-                if ((index + 1) % MAX_BATCH_SIZE === 0 || index === products.length - 1) {
-                    commitBatches.push(batch.commit()); // Añade la promesa del commit a la lista
-                    batch = db.batch(); // Reinicia el batch para el siguiente grupo de documentos
-                }
-            });
-        } catch (error) {
-            console.error('Error addProductsToFirestore:', error);
-        }
-
-        // Espera a que todos los batches se hayan enviado
-        await Promise.all(commitBatches);
-    }
-    // save embeddings in firestore
-    const saveEmbeddingsOnFirestore = async (embeddings) => {
-        // Aquí deberías guardar los embeddings en Vertex AI
-        console.log('saveEmbeddingsOnFirestore:');
-        // Aquí deberías guardar los embeddings en Firestore
-        const commitBatches = [];
-        const batch = db.batch();
-        try{
-            const embeddingsCollectionRef = db
-                .collection('showRooms')
-                .doc(req.params.showRoomId)
-                .collection('embeddings');
-
-            embeddings.forEach((embedding) => {
-                const docRef = embeddingsCollectionRef.doc(); // Create a new document for each embedding
-                batch.set(docRef, embedding);
-            });
-        }catch(err){
-            console.error('Error saveEmbeddingsOnFirestore:', err);
-        }
-        commitBatches.push(batch.commit());
-    };
-
-    // ** Embeddigs
-    // remueve las claves que no queremos en el embedding
-    const prepareProductTextForEmbedding = (productData) => {
-        try {
-            console.log('prepareProductTextForEmbedding');
-            const excludedKeys = ['pics', 'pdf']; // Claves que quieres excluir
-            let textParts = [];
-
-            // Recorrer todas las claves y valores del objeto productData
-            for (const [key, value] of Object.entries(productData)) {
-                // Comprobar si la clave no está excluida y el valor no es nulo ni vacío
-                if (!excludedKeys.includes(key) && value) {
-                    // Convertir la clave de formato snake_case a texto legible
-                    const readableKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); // Convierte snake_case a Title Case
-                    // Agregar la parte de texto al array
-                    textParts.push(`${readableKey}: ${value}`);
-                }
-            }
-
-            // Unir todas las partes con un punto y espacio como separador.
-            return textParts.join('. ');
-        } catch (error) {
-            console.error('Error prepareProductTextForEmbedding:', error);
-            return ''; // Devuelve una cadena vacía en caso de error.
-        }
-    };
-    // Función para obtener embeddings con OpenAI
-    const getEmbeddingsFromOpenAI = async (text) => {
-        
-        try {
-            // print
-            console.log('getEmbeddingsFromOpenAI:');
-            // Instancia de OpenAI
-            const openai = new OpenAI({
-                apiKey: process.env.OPENAI_API_KEY,
-            });
-            // Obtiene el embedding del texto
-            const response = await openai.embeddings.create({
-                model: "text-embedding-3-small",
-                input: text,
-                encoding_format: "float",
-            });
-            // Asegúrate de acceder correctamente a la respuesta para obtener el embedding
-            // console.log('Embedding:', response);
-            return response // Ajusta según la estructura de la respuesta
-        } catch (error) {
-            console.error('Error getEmbeddingsFromOpenAI:', error);
-            return null; // O maneja el error según prefieras
-        }
-    };
-    // Función para procesar el CSV y generar embeddings
-    const processCSVAndGenerateEmbeddings = async (data,sellerId) => {
-        try {  
-            // print 
-            console.log('processCSVAndGenerateEmbeddings:');
-            // Array para almacenar los embeddings
-            const embeddings = [];
-            // Procesa cada producto y obtiene su embedding
-            for (const productData of data) {
-                // console.log('Product data:', productData);
-                // Prepara el texto del producto para el embedding y obtén el embedding
-                // const {textParts} = await prepareProductTextForEmbedding(productData);
-                const embedding = await getEmbeddingsFromOpenAI(await prepareProductTextForEmbedding(productData));
-                if (embedding) {
-                    embeddings.push({ sellerId, embedding }); // Asocia el embedding con el ID del vendedor
-                }
-            }
-
-            // // Guarda los embeddings en un nuevo archivo CSV
-            // const embeddingsFilePath = filepath.replace('.csv', '_embeddings.csv');
-            // let csvContent = "sellerId,embedding\n"; // Encabezados del CSV
-
-            // try{
-            //     // Procesa cada embedding y agrégalo al archivo CSV
-            //     await embeddings.forEach((item,i) => {
-            //         console.log('Item:', item);
-            //         // Asegúrate de que item.data sea un array y tenga elementos antes de continuar
-            //         if (Array.isArray(item.embedding.data) && item.embedding.data.length > 0) {
-            //             // Accede al primer elemento de data (o iterar a través de todos si es necesario)
-            //             const firstEmbeddingObject = item.embedding.data; // Asumiendo que quieres el primer objeto embedding
-            //             // Ahora verifica que firstEmbeddingObject.embedding sea un array
-            //             if (Array.isArray(firstEmbeddingObject)) {
-            //                 const embeddingStr = firstEmbeddingObject.join(','); // Convierte el array del embedding a string
-            //                 // console.log('Embedding string:', embeddingStr);
-            //                 csvContent += `${item.sellerId},${embeddingStr}\n`;
-                            
-            //             } else {
-            //                 console.error('Error: firstEmbeddingObject.embedding is not an array', firstEmbeddingObject.embedding);
-            //             }
-            //         } else {
-            //             console.error('Error: item.data is not an array or is empty', item.data);
-            //         }
-            //     });
-            // }catch (err) {
-            //     console.error('Error processing embeddings:', err);
-            // }
-
-            // // Escribe el archivo CSV
-            // fs.writeFileSync(embeddingsFilePath, csvContent);
-            // console.log({csvContent});
-            
-            return embeddings; // Retorna el embedding
-        } catch (error) {
-            console.error('Error processCSVAndGenerateEmbeddings:', error);
-        }
-    };
-    // make array with embeddings to save on bucket
-    const createArrayWithEmbeddings = async (embeddings) => {
-        try {
-            console.log('createArrayWithEmbeddings:');
-            let csvContent = "embedding\n"; // Encabezado del CSV
-            // Procesa cada embedding y agrégalo al archivo CSV
-            embeddings.forEach((item) => {
-                // Asegúrate de que item.embedding.data sea un array y tenga elementos antes de continuar
-                if (Array.isArray(item.embedding.data) && item.embedding.data.length > 0) {
-                    // Accede al primer elemento de data (o itera a través de todos si es necesario)
-                    const embeddingStr = item.embedding.data.join(','); // Convierte el array del embedding a string
-                    csvContent += `${embeddingStr}\n`;
-                } else {
-                    console.error('Error: item.embedding.data is not an array or is empty', item.embedding.data);
-                }
-            });
-        } catch (err) {
-            console.error('Error createArrayWithEmbeddings:', err);
-        }
-    }
-
-    try{
+    try {
         // check if the user can post on products collection
         if(req.user.type === "seller"){
             // req params
@@ -641,15 +359,11 @@ exports.xlsx3 = async (req, res) => {
             let showRoomId = req.params.showRoomId
             // busboy
             const busboy = Busboy({ headers: req.headers });
-            // temp path
-            let tempFilePath;
-            // paths gcp
-            let showRoomPathFolder = `gs://sensebuy-e8add.appspot.com/${showRoomId}`;
-            let showRoomCsvFilePath = `gs://sensebuy-e8add.appspot.com/${showRoomId}/${showRoomId}_embedding.json`
-            
             // file
-            let mimetype = '';
-
+            let mimetype = ''
+            let newFileName = ''
+            // path to global csv file of embeddings
+            let showRoomCsvFilePath = `${showRoomId}/${showRoomId}_embedding.json`
             // on file
             busboy.on('file', (fieldname, file, filename, encoding, mime) => {
                 // if (mime !== 'text/csv' && !mime.includes('spreadsheetml')) 
@@ -658,48 +372,57 @@ exports.xlsx3 = async (req, res) => {
                     console.log('File type not supported:', mime);
                     return; // Ignora el archivo si no es CSV o XLSX
                 }
-                const newFileName = `${req.params.sellerId} - ${filename.filename}`;
+                newFileName = `${req.params.sellerId} - ${filename.filename}`;
+                // console.log('newFileName:', newFileName);
                 tempFilePath = path.join(os.tmpdir(), newFileName);
+                console.log('tempFilePath:', tempFilePath);
                 mimetype = mime;
                 file.pipe(fs.createWriteStream(tempFilePath));
             });
-            
             // on finish
             busboy.on('finish', async () => {
                 try {
                     // ** methods
-                    // upload file to gcp bucket
-                    await uploadFileToBucket(tempFilePath, mimetype)
+                    // upload xlsx file to cloud storage
+                    const uploadXlsxFileToBucket = await uploadFileToCloudStorage(tempFilePath, mimetype)
                     // convert .xls en .csv
-                    const csvOfProductsFilepath = await convertExcelToCSVAndCreateNewPath(tempFilePath);
+                    const csvOfProductsFilepath = await convertExcelToCSV(tempFilePath);
+                    // console.log('csvOfProductsFilepath:', csvOfProductsFilepath);
                     // extract data from csv
-                    const extractDataFromCSVFile = await extractDataFromCSV(csvOfProductsFilepath);
+                    const extractDataFromCSVFile = await extractDataFromCSV(csvOfProductsFilepath)
+                    // console.log('extractDataFromCSVFile:', extractDataFromCSVFile);
                     // add data of products to firestore
-                    const productsToFirestore = await addProductsToFirestore(extractDataFromCSVFile);
+                    const optionsDB = {
+                        data: extractDataFromCSVFile,
+                        collection: 'products',
+                        extras: {
+                            sellerId: sellerId,
+                            companyName: res.locals.companyData.name,
+                            coords:res.locals.coordsData
+                        }
+                    }
+                    const productsToFirestore = await addDataToFirestore(optionsDB);
                     // process csv and generate embeddings
                     const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(extractDataFromCSVFile, sellerId);
                     // check for if embeddings exist
                     if(createEmbeddingsOfProducts.length > 0) {
+                        // print
+                        // console.log("there are embeddings");
                         // save embeddings on firestore
-                        const embbedingsToFirestore = await saveEmbeddingsOnFirestore(createEmbeddingsOfProducts);
+                        const embbedingsToFirestore = await saveEmbeddingsOnFirestore(createEmbeddingsOfProducts,showRoomId);
                         // save embeddings on bucket
-                        const arrayOfEmbeddings = createArrayWithEmbeddings(createEmbeddingsOfProducts);
-                        // download global csv file
-                        const fileName = `${showRoomId}_embedding.json`
-                        const globalCsvFilePath = await downloadCsvFile(fileName);
+                        const arrayOfEmbeddings = await createArrayWithEmbeddings(createEmbeddingsOfProducts);
+                        // print
+                        // console.log({arrayOfEmbeddings});
+                        // save embeddings on bucket
+                        const downloadGlobalCsvFileFromBucket = await downloadFileOfCloudStorage(showRoomCsvFilePath);
+                        // print
+                        // console.log('downloadGlobalCsvFileFromBucket:', downloadGlobalCsvFileFromBucket);
                         // update global csv file
-                        const updateGlobalCsv = await updateGlobalCsvFile(globalCsvFilePath,arrayOfEmbeddings);
-                        // upload global csv file
-                        let mimetype = "text/csv"
-                        // Sube el archivo CSV al bucket de GCP
-                        await uploadFileToBucket(globalCsvFilePath, mimetype);
-                        // Responde al cliente
-                        res.json({ message: 'CSV file processed and uploaded successfully' });
-                    } else {
-                        return res.status(400).json({ error: 'There´s any embeddnigs available to save' });
+                        const updateGlobalCsv = await updateGlobalCsvFile(downloadGlobalCsvFileFromBucket,arrayOfEmbeddings);
+                        // upload xlsx file to cloud storage
+                        const uploadXlsxFileToBucket = await uploadFileToCloudStorage(downloadGlobalCsvFileFromBucket, mimetype, showRoomCsvFilePath);
                     }
-                    // Responde al cliente
-                    // res.json({ message: 'File processed and uploaded successfully' });
                 } catch (error) {
                     console.error('Error inside busboy finish:', error);
                     res.status(500).json({ error: error.message });
@@ -721,13 +444,10 @@ exports.xlsx3 = async (req, res) => {
                 busboy.on('error', reject);
                 busboy.end(req.rawBody);
             });
+            
             req.pipe(busboy);
-        } else {
-            // responde al cliente
-            res.status(403).json({ error: 'You must have the required permissions' });
         }
-    }
-    catch (err) {
+    } catch (err) {
         console.error('Global error:', err);
         res.status(500).json({ error: err.message });
     }
