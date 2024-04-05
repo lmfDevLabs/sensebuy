@@ -16,6 +16,7 @@
   "dependencies": {
     "@google-cloud/firestore": "^7.1.0",
     "@google-cloud/pubsub": "^4.0.6",
+    "@google-cloud/vertexai": "^0.5.0",
     "@langchain/community": "^0.0.35",
     "algoliasearch": "^4.22.1",
     "chromadb": "^1.8.1",
