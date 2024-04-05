@@ -67,22 +67,4 @@ exports.extractDataFromCSV = (filepath) => {
             .on('error extractDataFromCSV:', reject);
     });
 };
-// Actualizar archivo CSV global añadiendo contenido nuevo
-exports.updateGlobalCsvFile = async (embeddingsFilePath, embeddings) => {
-    try {
-        console.log('updateGlobalCsvFile:');
 
-        // Genera el contenido CSV a partir del array 'embeddings' o usa la cadena directamente si no es un array
-        const csvContent = Array.isArray(embeddings)
-            ? embeddings.map(embedding => Object.values(embedding).join(',')).join('\n')
-            : embeddings; // Si no es un array, se asume que 'embeddings' ya es una cadena en formato CSV
-
-        console.log({csvContent});
-    
-        // Añade el contenido CSV al archivo existente
-        await fs.promises.appendFile(embeddingsFilePath, csvContent + '\n'); // Añade una nueva línea al final, por si acaso
-
-    } catch (err) {
-        console.error('Error al actualizar el archivo CSV global', err);
-    }
-};

@@ -1,3 +1,4 @@
+const fs = require('fs').promises; // Importa el módulo 'fs' con promesas
 // open ai
 const { OpenAI } = require('openai');
 
@@ -49,11 +50,11 @@ const getEmbeddingsFromOpenAI = async (text) => {
         console.error('Error getEmbeddingsFromOpenAI:', error);
         return null; // O maneja el error según prefieras
     }
-};
+}; 
 // Función para procesar el CSV y generar embeddings
 exports.processCSVAndGenerateEmbeddings = async (data,id) => {
     try {  
-        // print 
+        // print  
         console.log('processCSVAndGenerateEmbeddings:');
         // Array para almacenar los embeddings
         const embeddings = [];
@@ -61,7 +62,6 @@ exports.processCSVAndGenerateEmbeddings = async (data,id) => {
         for (const productData of data) {
             // console.log('Product data:', productData);
             // Prepara el texto del producto para el embedding y obtén el embedding
-            // const {textParts} = await prepareProductTextForEmbedding(productData);
             const embedding = await getEmbeddingsFromOpenAI(await prepareTextForEmbedding(productData));
             if (embedding) {
                 embeddings.push({ id, embedding }); // Asocia el embedding con el ID del vendedor
@@ -77,7 +77,7 @@ exports.createArrayWithEmbeddings = async (embeddings) => {
     
     try {
         console.log('createArrayWithEmbeddings:');
-        let csvContent = ""; // Encabezado del CSV
+        let csvContent = []; // Encabezado del CSV
 
         // Procesa cada embedding y agrégalo al archivo CSV
         embeddings.forEach((item) => {
@@ -86,8 +86,10 @@ exports.createArrayWithEmbeddings = async (embeddings) => {
                 // Accede al valor de cada elemento del array data 
                 for (const value of item.embedding.data) {
                     // Agrega el valor (escape special characters if needed)
-                    csvContent += `${value},\n`;
+                    csvContent.push(value);
                 }
+                // Agrega el ID del vendedor al final del array
+                csvContent.push(item.id);
             } else {
                 console.error('Error: item.embedding.data is not an array or is empty', item.embedding.data);
             }
@@ -98,3 +100,42 @@ exports.createArrayWithEmbeddings = async (embeddings) => {
         console.error('Error createArrayWithEmbeddings:', err);
     }
 }
+
+// Actualizar archivo JSON global añadiendo contenido nuevo
+exports.updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
+    try {
+        console.log('updateJSONFileWithEmbeddings:');
+
+        // Inicializa el array que contendrá los datos existentes y nuevos
+        let existingData = [];
+
+        try {
+            // Intenta leer el archivo existente
+            const data = await fs.readFile(embeddingsFilePath, 'utf8');
+            if (data) {
+                // Solo parsea si hay datos para evitar errores de JSON vacío
+                existingData = JSON.parse(data);
+            }
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                console.log('El archivo no existe, se creará uno nuevo.');
+            } else {
+                // Si el archivo existe pero está corrupto, lanza un error
+                throw new Error('El archivo JSON existente está corrupto o no se puede leer.');
+            }
+        }
+
+        // Agregar los nuevos embeddings al array existente
+        const updatedData = existingData.concat(embeddings);
+
+        // Convertir el array actualizado a un string JSON
+        const jsonString = JSON.stringify(updatedData, null, 2);
+
+        // Escribir el string JSON de vuelta al archivo
+        await fs.writeFile(embeddingsFilePath, jsonString);
+        console.log(`JSON file updated at ${embeddingsFilePath}`);
+    } catch (err) {
+        console.error('Error updating JSON file:', err);
+        // Manejo adicional de errores si se desea
+    }
+};

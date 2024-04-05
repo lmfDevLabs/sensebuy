@@ -25,7 +25,7 @@ const {
 const {
     processCSVAndGenerateEmbeddings,
     createArrayWithEmbeddings,
-    
+    updateGlobalEmbeddingsFile
 } = require('../../utilities/embeddings');
 
 
@@ -415,13 +415,13 @@ exports.xlsx3 = async (req, res) => {
                         // print
                         // console.log({arrayOfEmbeddings});
                         // save embeddings on bucket
-                        const downloadGlobalCsvFileFromBucket = await downloadFileOfCloudStorage(showRoomCsvFilePath);
+                        const downloadGlobalEmbeddingsFileFromBucket = await downloadFileOfCloudStorage(showRoomCsvFilePath);
                         // print
                         // console.log('downloadGlobalCsvFileFromBucket:', downloadGlobalCsvFileFromBucket);
                         // update global csv file
-                        const updateGlobalCsv = await updateGlobalCsvFile(downloadGlobalCsvFileFromBucket,arrayOfEmbeddings);
+                        const updateGlobalEmbeddingJsonFile = await updateGlobalEmbeddingsFile(downloadGlobalEmbeddingsFileFromBucket,arrayOfEmbeddings);
                         // upload xlsx file to cloud storage
-                        const uploadXlsxFileToBucket = await uploadFileToCloudStorage(downloadGlobalCsvFileFromBucket, mimetype, showRoomCsvFilePath);
+                        const uploadJsonFileJustUpdatedToBucket = await uploadFileToCloudStorage(downloadGlobalEmbeddingsFileFromBucket, mimetype, showRoomCsvFilePath);
                     }
                 } catch (error) {
                     console.error('Error inside busboy finish:', error);
