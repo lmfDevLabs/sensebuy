@@ -18,6 +18,9 @@ exports.addDataToFirestore = async (optionsDB) => {
             switch(optionsDB.collection){
                 case 'products':
                 let dataObject = {
+                    showRoomData:{
+                        showRoomId:optionsDB.extras.showRoomId,
+                    },
                     selleData:{
                         sellerId:optionsDB.extras.sellerId,
                         companyName:optionsDB.extras.companyName,
@@ -64,3 +67,17 @@ exports.saveEmbeddingsOnFirestore = async (embeddings,showRoomId) => {
     }
     commitBatches.push(batch.commit());
 };
+
+// to save url path to file embeddings and docs from sellers products
+exports.saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,sellerId) => {
+    // Obtener la URL del archivo JSON subido
+    const fileUrl = `${process.env.URL_OF_CLOUD_STORAGE_BUCKET}${jsonFilePath}`;
+
+    // Guardar la URL del archivo JSON en el documento del vendedor en Firestore
+    const sellerRef = db.collection('sellers').doc(sellerId);
+    await sellerRef.update({
+        embeddingsAndDocsUrl: fileUrl
+    });
+    console.log('URL del archivo JSON guardada en el documento del vendedor en Firestore.');
+    
+} 
