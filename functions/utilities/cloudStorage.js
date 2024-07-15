@@ -3,32 +3,21 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 // firebase 
-const { 
-    storage,
+const {  
+    storage, 
 } = require('../firebase/admin');
 const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
 
 // upload files to cloud storage
-exports.uploadFileToCloudStorage = async (tempFilePath, mimetype) => {
+exports.uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype) => {
     try {
         console.log('uploadFileToBucket');
-
-        // Encuentra la posición del segmento "/T/" en el path
-        const tempDirMarker = tempFilePath.indexOf('/T/') + 3;
-
-        // Extrae la parte del path después de "/T/" para usar como destino en el bucket
-        // Asegúrate de ajustar esto según la estructura exacta de tus paths temporales
-        const cloudStoragePath = tempFilePath
-            .substring(tempDirMarker)
-            .replace(/^.*?\/(lsmkexTISq5JzCmIMUi5\/)/, '$1');
 
         await bucket.upload(tempFilePath, {
             destination: cloudStoragePath,
             resumable: false,
             metadata: {
-                metadata: {
-                    contentType: mimetype
-                }
+                contentType: mimetype
             }
         });
 
@@ -80,7 +69,7 @@ exports.downloadFileOfCloudStorage = async (file) => {
             try {
                 // Intenta leer el archivo para confirmar que fue descargado correctamente
                 const fileContent = fs.readFileSync(tempFilePath, {encoding: 'utf8'});
-                console.log('Contenido del archivo antes de parsear:', fileContent);
+                // console.log('Contenido del archivo antes de parsear:', fileContent);
                 const parsedJson = JSON.parse(fileContent);
                 console.log('Contenido del archivo JSON:', parsedJson);
             } catch (error) {
