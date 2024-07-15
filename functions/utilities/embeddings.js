@@ -51,6 +51,8 @@ const getEmbeddingsFromOpenAI = async (text) => {
         return null; // O maneja el error según prefieras
     }
 }; 
+module.exports = { getEmbeddingsFromOpenAI }
+
 // Función para procesar el CSV y generar embeddings
 exports.processCSVAndGenerateEmbeddings = async (data,id) => {
     try {  
@@ -72,6 +74,7 @@ exports.processCSVAndGenerateEmbeddings = async (data,id) => {
         console.error('Error processCSVAndGenerateEmbeddings:', error);
     }
 };
+
 // make array with embeddings to save on bucket
 exports.createArrayWithEmbeddings = async (embeddings) => {
     
