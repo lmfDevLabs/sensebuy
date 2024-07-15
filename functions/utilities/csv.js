@@ -39,6 +39,7 @@ exports.extractDataFromCSV = (filepath) => {
             .pipe(csv())
             .on('data', (row) => {
                 let car = {};
+                // loop
                 for (const key in row) {
                     // to trim the values
                     let value = row[key].trim();
@@ -47,18 +48,20 @@ exports.extractDataFromCSV = (filepath) => {
                     // Convierte "null" a null
                     if (value.toLowerCase() === "null") {
                         car[newKey] = null;
-                    } 
+                    }  
                     // Manejo especial para el campo "price"
-                    else if (newKey === 'price' && /^[0-9.]+$/.test(value)) {
-                        car[newKey] = parseInt(value.replace(/\./g, ''), 10);
+                    else if (newKey === 'price_($)' && /^[0-9.]+$/.test(value)) {
+                        car[newKey] = parseFloat(value);
                     } 
                     // Convierte números con puntos (decimales)
-                    else if (/^-?\d+(\.\d+)?$/.test(value)) {
+                    else if (/^-?\d+(\.\d+)?$/.test(value)) { 
                         car[newKey] = parseFloat(value);
                     }
-                    // convierte a minúsculas
-                    else {
+                    // convierte a minúsculas excepto para "pdf" y "pics"
+                    else if (newKey !== 'pdf' && newKey !== 'pics') {
                         car[newKey] = value.toLowerCase();
+                    } else {
+                        car[newKey] = value;  // Mantener el valor original para "pdf" y "pics"
                     }
                 }
                 dataObject.push(car);
