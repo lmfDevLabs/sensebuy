@@ -20,6 +20,9 @@ const app = require('express')()
 const cors = require('cors')
 app.use(cors({ origin: true }))
 
+// pdf parse
+const pdfParse = require('pdf-parse');
+
 // MIDDLEWARES
 // app.use(express.json());
 // middleware for auth
@@ -73,7 +76,8 @@ const {
   // images,
   xlsx,
   xlsx2,
-  xlsx3
+  xlsx3,
+  docs 
 } = require('./handlers/products/products');
 
 // buyers
@@ -81,6 +85,7 @@ const {
 //   getBuyers,
 //   getBuyer,
   buyers,
+  tokenBuyers,
 //   updateBuyer,
 //   deleteBuyer
 } = require('./handlers/buyers/buyers');
@@ -96,6 +101,24 @@ const {
 //   updateQuery,
 //   deleteQuery
 } = require('./handlers/queries/queries');
+
+// chats
+const {
+  
+  } = require('./handlers/chats/chats');
+
+// utilities
+const {
+  getEmbeddingsFromOpenAI
+} = require('./utilities/embeddings');
+
+const {
+  downloadDocFromExternalUrl
+} = require('./utilities/docs');
+
+const {
+  saveUrlFromEmbeddingsAndDocsOfProductsFromSellers
+} = require('./utilities/firestore');
 
 // //////////////////////////////////////////// +++++++ API REST ROUTES +++++++ ///////////////////////////////////////////
 
@@ -188,11 +211,16 @@ app.post(`/${apiVersion}/sellers/coords`, firebaseAuth, coords);
 // app.delete(`/${apiVersion}/products/:productId`, firebaseAuth, deleteProduct);
 // // 6-POST /products/:productId/images: Para agregar imagenes a un producto.
 // app.post(`/${apiVersion}/products/:productId/images`, firebaseAuth, images);
-// 7-POST /products/csv: Para agregar productos a través de un archivo CSV.
+// 7-POST /products/xls: Para agregar productos a través de un archivo xlsx.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx`, firebaseAuth, coordsOfSellers, xlsx);
-// 8-POST /products/csv: Para agregar productos a través de un archivo CSV and embbeding stuff.
+// 8-POST /products/xls2: Para agregar productos a través de un archivo xlsx and embbeding stuff.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx2`, firebaseAuth, coordsOfSellers, xlsx2);
+// 9-POST /products/xls3: Para agregar productos a través de un archivo xlsx and embbeding complete cycle.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, firebaseAuth, coordsOfSellers, xlsx3);
+// 10-POST /products/:productId/docs: Para agregar documentos a un producto.
+app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/product/:productId/docs`, docs);
+
+
 /* BUYERS */
 // // super admin
 // // 1-GET /buyers: Obtiene todos los compradores.
@@ -203,6 +231,8 @@ app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, 
 // // user admin
 // 3-POST /buyers: Crea un nuevo comprador.
 app.post(`/${apiVersion}/buyers`, firebaseAuth, buyers);
+// get json token to publish messages over pubsub
+app.get(`/${apiVersion}/buyersToken/:showRoomId`, firebaseAuth, tokenBuyers);
 // // 4-PUT /buyers/:id: Actualiza un comprador específico.
 // app.put(`/${apiVersion}/buyers/:buyerId`, firebaseAuth, updateBuyer);
 // // 5-DELETE /buyers/:id: Elimina un comprador específico.
@@ -229,6 +259,21 @@ app.post(`/${apiVersion}/queries2`, firebaseAuth, queriesOpenAIAndAlgolia);
 // app.put(`/${apiVersion}/queries/:queryId`, firebaseAuth, updateQuery);
 // // 7-DELETE /queries/:id: Elimina una consulta específica hecha por un usuario.
 // app.delete(`/${apiVersion}/queries/:queryId`, firebaseAuth, deleteQuery);
+
+/* CHATS */
+// // super admin
+// // 1-GET /chats: Obtiene todos los chats.
+// app.get(`/${apiVersion}/chats`, firebaseAuth, getChats);
+// // 2-GET /chats/:id: Obtiene un chat específico.
+// app.get(`/${apiVersion}/chats/:chatId`, firebaseAuth, getChat);
+
+// // user admin
+// // 3-POST /chats: Crea un nuevo chat.
+// app.post(`/${apiVersion}/chats`, firebaseAuth, chats);
+// // 4-PUT /chats/:id: Actualiza un chat específico.
+// app.put(`/${apiVersion}/chats/:chatId`, firebaseAuth, updateChat);
+// // 5-DELETE /chats/:id: Elimina un chat específico.
+// app.delete(`/${apiVersion}/chats/:chatId`, firebaseAuth, deleteChat);
 
 
 // /* PRODUCTS SUGESTIONS */
@@ -298,4 +343,68 @@ exports.listeAnyNewEmbeddingOnShowRoomCollection = functions.firestore
     .onCreate(async(snap,context) => {
         console.log('New embedding added to the showroom');
         
+});
+
+// to create docs embeddings after the product creation
+// exports.toCreateProductsDocsEmbeddings = functions.firestore
+//   .document('products/{productId}')
+//   .onCreate(async (snap, context) => {
+//     console.log('toCreateProductsDocsEmbeddings');
+//     // data snap del producto
+//     const newProduct = snap.data();
+//     // data necesario del producto
+//     const sellerId = newProduct.sellerId;
+//     const pdfUrl = newProduct.pdf; 
+//     const showRoomId = newProduct.showRoomData.showRoomId
+
+//     try {
+//       // leer pdf
+//       const pdfBuffer = await downloadDocFromExternalUrl(pdfUrl);
+      
+//       const pdfText = await pdfParse(pdfBuffer).then(data => data.text);
+//       // generar embeddings desde open ai
+//       const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
+//       // path
+//       const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}.json`;
+//       // array para embeddings
+//       let embeddingsData = [];
+//       try {
+//         const tempFilePath = await downloadFileOfCloudStorage(jsonFilePath);
+//         const fileContent = fs.readFileSync(tempFilePath, 'utf8');
+//         embeddingsData = JSON.parse(fileContent);
+//       } catch (error) {
+//         console.log('No se encontró un archivo existente, se creará uno nuevo.');
+//       }
+//       // actualizar array de embeddings con data 
+//       embeddingsData.push({ productId: context.params.productId, embeddings: newEmbeddings });
+
+//       const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+//       fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
+
+//       // subir archivo actualizado con embeddings
+//       await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
+//       console.log('Embeddings actualizados y subidos con éxito.');
+
+//       // save url with data on seller collection
+//       saveUrlFromEmbeddingsAndDocsOfProductsFromSellers(tempFilePath)
+//     } catch (error) {
+//       console.error('Error:', error);
+//     }
+//   });
+
+// detect traffic of gps coords from buyers in topic events and db sync
+exports.detectTelemetryEventsForAllDevices = functions.pubsub.topic('telemetry').onPublish(async (message) => {
+  const payload = message.json;
+  const buyerId = payload.buyerId;
+  console.log({buyerId})
+  try {
+    const buyerDocRef = admin.firestore().collection('buyers').doc(buyerId);
+    await buyerDocRef.update({
+      dataMobilDevice: payload.dataMobilDevice,
+      statusOfBracelet: payload.statusOfBracelet
+    });
+    console.log('Message saved to Firestore for buyer:', buyerId);
+  } catch (error) {
+    console.error('Error saving message to Firestore:', error);
+  }
 });

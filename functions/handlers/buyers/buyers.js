@@ -1,10 +1,12 @@
+// node modules
+const fs = require('fs');
 // firebase
 const { db, admin, storage } = require('../../firebase/admin');
+// cloud storage
 const {
-    storageBucket
-} = require('../../firebase/firebaseConfig')
-
-// post products in statics with only a .csv file
+    downloadFileOfCloudStorage,
+} = require('../../utilities/cloudStorage');
+// post buyer
 exports.buyers = async (req, res) => {
     try {
         // check if the user can post on sellers collection
@@ -19,29 +21,44 @@ exports.buyers = async (req, res) => {
                     userId:req.user.uid
                 },
                 createdAt:new Date().toISOString(),
-                // live
-                liveCoords:{
-                    lat:0,
-                    lng:0,
-                    hash:"",
-                    nameOfPoint:""
-                },
-                liveFeed:{ 
-                    matchQuality:{
-                        color:"",
-                        value:0
-                    },
-                    matrixDistance:{
-                        color:"",
-                        value:0
-                    },
-                },
-                // queries relations
-                queries:{
-                    docsQueriesIds:[],
-                    onDocQueryId:"",
-                    docIdSelectedOfProductsSuggestions:"",
-                },
+                // live from smartphone
+                dataMobilDevice:{
+					lastMessageReceived:new Date().toISOString(),
+					liveCoords: {
+						hash: '',
+						lat: 0,
+						lng: 0,
+						nameOfPoint:''
+					},
+					liveFeed: {
+						matchQuality: {
+							color: '',
+							value:{r:0,g:0,b:0}
+						},
+						matrixDistance: {
+							color: '',
+							value:{r:0,g:0,b:0}
+						},
+						
+					},
+				},
+                // data from bracelet
+				statusOfBracelet:{
+                    active:false,
+					connectionStatus:0,
+					batteryLife:0,
+                    motorSpeed:0,
+                    colorSigns:{
+                        matchQuality: {
+							color: '',
+							value:{r:0,g:0,b:0}
+						},
+						matrixDistance: {
+							color: '',
+							value:{r:0,g:0,b:0}
+						},
+                    }
+				}
             }  
             
             // create buyer
@@ -55,4 +72,14 @@ exports.buyers = async (req, res) => {
     } catch (error) {
         res.status(500).send(error.message);
     }
+}
+
+// get token buyer to publisb over pubsub
+exports.tokenBuyers = async (req, res) => {
+    let showRoomId = req.params.showRoomId
+    let showRoomCsvFilePath = `${showRoomId}/sensebuy-e8add-482dddf1f0e3.json`
+    const downloadTokenJsonFileOfCloudStorage = await downloadFileOfCloudStorage(showRoomCsvFilePath);
+    const fileContent = fs.readFileSync(downloadTokenJsonFileOfCloudStorage, {encoding: 'utf8'});
+    console.log({fileContent})
+    res.send(fileContent)
 }
