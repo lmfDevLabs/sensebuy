@@ -1,3 +1,7 @@
+// nodejs
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
 // FIREBASE
 // functions
 const { onRequest } = require("firebase-functions/v2/https");
@@ -22,6 +26,9 @@ app.use(cors({ origin: true }))
 
 // pdf parse
 const pdfParse = require('pdf-parse');
+
+// mutex
+const { Mutex } = require('async-mutex');
 
 // MIDDLEWARES
 // app.use(express.json());
@@ -120,6 +127,9 @@ const {
   saveUrlFromEmbeddingsAndDocsOfProductsFromSellers
 } = require('./utilities/firestore');
 
+const {
+  uploadFileToCloudStorage
+} = require('./utilities/cloudStorage');
 // //////////////////////////////////////////// +++++++ API REST ROUTES +++++++ ///////////////////////////////////////////
 
 // API Version
@@ -219,7 +229,11 @@ app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx2`, 
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, firebaseAuth, coordsOfSellers, xlsx3);
 // 10-POST /products/:productId/docs: Para agregar documentos a un producto.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/product/:productId/docs`, docs);
-
+// 11-Test /testUrlPdf Para probar la creacion de los embeddings de un pdf
+app.get(`/${apiVersion}/testUrlPdf`, async (req,res)=>{
+  let result = await downloadDocFromExternalUrl(req.body.url)
+  console.log({result})
+})
 
 /* BUYERS */
 // // super admin
@@ -307,7 +321,7 @@ exports.updateShowRoomOnProductCreate = functions.firestore
         if (newProduct.tags && Array.isArray(newProduct.tags)) {
             try {
                 // ID del showroom a actualizar
-                const showRoomId = newProduct.showRoom;
+                const showRoomId = newProduct.sellerData.showRoom;
 
                 // Referencia al documento del showroom
                 const showRoomRef = admin.firestore().doc(`showRooms/${showRoomId}`);
@@ -337,8 +351,8 @@ exports.updateShowRoomOnProductCreate = functions.firestore
         }
     });
 
-// Escucha los eventos de escritura en la colección "embeddings"
-exports.listeAnyNewEmbeddingOnShowRoomCollection = functions.firestore
+// Escucha los eventos de escritura en la colección "embeddings" - no hace nada por ahora
+exports.listAnyNewEmbeddingOnShowRoomCollection = functions.firestore
     .document(`showRooms/lsmkexTISq5JzCmIMUi5/embeddings/{embeddingId}`)
     .onCreate(async(snap,context) => {
         console.log('New embedding added to the showroom');
@@ -350,47 +364,109 @@ exports.listeAnyNewEmbeddingOnShowRoomCollection = functions.firestore
 //   .document('products/{productId}')
 //   .onCreate(async (snap, context) => {
 //     console.log('toCreateProductsDocsEmbeddings');
-//     // data snap del producto
+//     // data from product
 //     const newProduct = snap.data();
-//     // data necesario del producto
-//     const sellerId = newProduct.sellerId;
+//     const sellerId = newProduct.sellerData.sellerId;
+//     const companyName = newProduct.sellerData.companyName;
 //     const pdfUrl = newProduct.pdf; 
-//     const showRoomId = newProduct.showRoomData.showRoomId
+//     const showRoomId = newProduct.showRoomData.showRoomId;
+//     const productId = context.params.productId;
 
 //     try {
-//       // leer pdf
+//       // pdf read
 //       const pdfBuffer = await downloadDocFromExternalUrl(pdfUrl);
-      
-//       const pdfText = await pdfParse(pdfBuffer).then(data => data.text);
-//       // generar embeddings desde open ai
+//       const pdfData = await pdfParse(pdfBuffer);
+//       const pdfText = pdfData.text;
+//       // embeddings
 //       const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
-//       // path
-//       const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}.json`;
-//       // array para embeddings
+//       // path to save on cs
+//       const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-${companyName}-embeddings.json`;
+//       // array to embeddings
 //       let embeddingsData = [];
 //       try {
-//         const tempFilePath = await downloadFileOfCloudStorage(jsonFilePath);
-//         const fileContent = fs.readFileSync(tempFilePath, 'utf8');
-//         embeddingsData = JSON.parse(fileContent);
+//         // cs part
+//         const [fileExists] = await storage.bucket(bucketName).file(jsonFilePath).exists();
+//         if (fileExists) {
+//           const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+//           await storage.bucket(bucketName).file(jsonFilePath).download({ destination: tempFilePath });
+//           const fileContent = fs.readFileSync(tempFilePath, 'utf8');
+//           embeddingsData = JSON.parse(fileContent);
+//         }
 //       } catch (error) {
 //         console.log('No se encontró un archivo existente, se creará uno nuevo.');
 //       }
-//       // actualizar array de embeddings con data 
-//       embeddingsData.push({ productId: context.params.productId, embeddings: newEmbeddings });
-
+//       // update embeddings
+//       embeddingsData.push({ productId, embeddings: newEmbeddings });
 //       const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+//       // write on file of embeddings
 //       fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
-
-//       // subir archivo actualizado con embeddings
+//       console.log({jsonFilePath})
 //       await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
 //       console.log('Embeddings actualizados y subidos con éxito.');
-
-//       // save url with data on seller collection
-//       saveUrlFromEmbeddingsAndDocsOfProductsFromSellers(tempFilePath)
 //     } catch (error) {
 //       console.error('Error:', error);
 //     }
 //   });
+
+exports.toCreateProductsDocsEmbeddings = functions.firestore
+  .document('products/{productId}')
+  .onCreate(async (snap, context) => {
+    console.log('toCreateProductsDocsEmbeddings');
+    // data
+    const newProduct = snap.data();
+    const sellerId = newProduct.sellerData.sellerId;
+    const companyName = newProduct.sellerData.companyName;
+    const pdfUrl = newProduct.pdf; 
+    const showRoomId = newProduct.showRoomData.showRoomId;
+    const productId = context.params.productId;
+    // mutex
+    const mutex = new Mutex();
+    // bucket
+    const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
+    try {
+      // Leer pdf
+      const pdfBuffer = await downloadDocFromExternalUrl(pdfUrl);
+      const pdfData = await pdfParse(pdfBuffer);
+      const pdfText = pdfData.text;
+
+      // Generar embeddings
+      const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
+
+      // Ruta para guardar en CS
+      const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-${companyName}-embeddings.json`;
+      let embeddingsData = [];
+
+      await mutex.runExclusive(async () => {
+        try {
+          // Leer el archivo JSON existente o crear uno nuevo
+          const [fileExists] = await bucket.file(jsonFilePath).exists();
+          console.log({fileExists})
+          if (fileExists) {
+            console.log('Se encontro archivo existente, no se creará uno nuevo.');
+            const tempFilePath = path.join(os.tmpdir(),`${sellerId}.json`);
+            await bucket.file(jsonFilePath).download({ destination: tempFilePath });
+            const fileContent = fs.readFileSync(tempFilePath, 'utf8');
+            embeddingsData = JSON.parse(fileContent);
+          } else {
+            console.log('No se encontró un archivo existente, se creará uno nuevo.');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+        }
+
+        // Actualizar embeddings
+        embeddingsData.push({ productId, embeddings: newEmbeddings });
+        const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+        fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
+
+        // Subir archivo actualizado con embeddings
+        await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
+        console.log('Embeddings actualizados y subidos con éxito.');
+      });
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  }); 
 
 // detect traffic of gps coords from buyers in topic events and db sync
 exports.detectTelemetryEventsForAllDevices = functions.pubsub.topic('telemetry').onPublish(async (message) => {
