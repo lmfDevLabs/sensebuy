@@ -50,11 +50,10 @@ const getEmbeddingsFromOpenAI = async (text) => {
         console.error('Error getEmbeddingsFromOpenAI:', error);
         return null; // O maneja el error según prefieras
     }
-}; 
-module.exports = { getEmbeddingsFromOpenAI }
+};  
 
 // Función para procesar el CSV y generar embeddings
-exports.processCSVAndGenerateEmbeddings = async (data,id) => {
+const processCSVAndGenerateEmbeddings = async (data,id) => {
     try {  
         // print  
         console.log('processCSVAndGenerateEmbeddings:');
@@ -76,7 +75,7 @@ exports.processCSVAndGenerateEmbeddings = async (data,id) => {
 };
 
 // make array with embeddings to save on bucket
-exports.createArrayWithEmbeddings = async (embeddings) => {
+const createArrayWithEmbeddings = async (embeddings) => {
     
     try {
         console.log('createArrayWithEmbeddings:');
@@ -105,7 +104,7 @@ exports.createArrayWithEmbeddings = async (embeddings) => {
 }
 
 // Actualizar archivo JSON global añadiendo contenido nuevo
-exports.updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
+const updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
     try {
         console.log('updateJSONFileWithEmbeddings:');
 
@@ -141,4 +140,13 @@ exports.updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
         console.error('Error updating JSON file:', err);
         // Manejo adicional de errores si se desea
     }
+};
+
+// module exports
+module.exports = {
+    prepareTextForEmbedding,
+    getEmbeddingsFromOpenAI,
+    processCSVAndGenerateEmbeddings,
+    createArrayWithEmbeddings,
+    updateGlobalEmbeddingsFile
 };
