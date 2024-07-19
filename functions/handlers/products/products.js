@@ -147,7 +147,7 @@ exports.xlsx = async (req, res) => {
 		});
 
 		return {
-			arrKeys,
+			arrKeys, 
 			arrValues
 		};
 	};
@@ -375,7 +375,7 @@ exports.xlsx3 = async (req, res) => {
 					console.log('File type not supported:', mime);
 					return; // Ignora el archivo si no es CSV o XLSX
 				}
-				newFileName = `${req.params.sellerId} - ${filename.filename}`;
+				newFileName = `${req.params.sellerId}-${filename.filename}`;
 				// console.log('newFileName:', newFileName);
 				tempFilePath = path.join(os.tmpdir(),newFileName)
 				// console.log('tempFilePath:', tempFilePath);
@@ -383,7 +383,7 @@ exports.xlsx3 = async (req, res) => {
 				// console.log('cloudStoragePath:', cloudStoragePath);
 				mimetype = mime;
 				file.pipe(fs.createWriteStream(tempFilePath));
-			});
+			}); 
 			// on finish
 			busboy.on('finish', async () => {
 				try {
@@ -407,13 +407,13 @@ exports.xlsx3 = async (req, res) => {
 							coords:res.locals.coordsData,
 							showRoomId
 						}
-					}
-					const productsToFirestore = await addDataToFirestore(optionsDB);
+					} 
+					const productsToFirestore = await addDataToFirestore(optionsDB); 
 					// process csv and generate embeddings
 					const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(extractDataFromCSVFile, sellerId);
 					// check for if embeddings exist
 					if(createEmbeddingsOfProducts.length > 0) {
-						// print
+						// print 
 						// console.log("there are embeddings");
 						// save embeddings on firestore
 						const embbedingsToFirestore = await saveEmbeddingsOnFirestore(createEmbeddingsOfProducts,showRoomId);
@@ -429,6 +429,8 @@ exports.xlsx3 = async (req, res) => {
 						const updateGlobalEmbeddingJsonFile = await updateGlobalEmbeddingsFile(downloadGlobalEmbeddingsFileFromBucket,arrayOfEmbeddings);
 						// upload xlsx file to cloud storage
 						const uploadJsonFileJustUpdatedToBucket = await uploadFileToCloudStorage(downloadGlobalEmbeddingsFileFromBucket, showRoomCsvFilePath, mimetype);
+						// Guardar la ruta del archivo en la colección de sellers en Firestore
+						saveUrlFromEmbeddingsAndDocsOfProductsFromSellers(cloudStoragePath,sellerId)
 					}
 				} catch (error) {
 					console.error('Error inside busboy finish:', error);
@@ -460,74 +462,7 @@ exports.xlsx3 = async (req, res) => {
 	}
 };
 
-
-// // para subir documentos .pdf a los productos de los vendedores - test mode
-// exports.docs = async (req, res) => {
-// 	try {
-// 		await new Promise((resolve, reject) => {
-// 			const busboy = Busboy(
-// 				{ 
-// 					headers: req.headers,
-// 					limits: {
-// 						fileSize: 10 * 1024 * 1024 // Límite de tamaño de archivo de 10MB
-// 					} 
-// 				}
-// 			);
-
-// 			busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-// 				console.log(`Received file: ${JSON.stringify(filename)}`);
-				
-// 				// Ensure filename is a string
-// 				if (typeof filename === 'object' && filename !== null && 'filename' in filename) {
-// 					filename = filename.filename;
-// 				}
-
-// 				if (typeof filename !== 'string') {
-// 					const errMsg = `Invalid filename type: ${typeof filename}`;
-// 					console.error(errMsg);
-// 					return reject(new Error(errMsg));
-// 				}
-
-// 				const saveTo = path.join(os.tmpdir(), path.basename(filename));
-// 				console.log('Uploading to: ' + saveTo);
-// 				const writeStream = fs.createWriteStream(saveTo);
-
-// 				file.pipe(writeStream);
-
-// 				writeStream.on('close', () => {
-// 					console.log(`File [${fieldname}] Finished uploading to: ${saveTo}`);
-// 					resolve();
-// 				});
-
-// 				writeStream.on('error', (err) => {
-// 					console.error('Error writing file:', err);
-// 					reject(err);
-// 				});
-
-// 				file.on('end', () => {
-// 					console.log('File stream ended');
-// 				});
-// 			});
-
-// 			busboy.on('finish', () => {
-// 				console.log('Upload complete');
-// 			});
-
-// 			busboy.on('error', (err) => {
-// 				console.error('Error handling file upload:', err);
-// 				reject(err);
-// 			});
-
-// 			busboy.end(req.body);
-// 		});
-
-// 		res.status(200).send("That's all folks!");
-// 	} catch (err) {
-// 		console.error('Unexpected error:', err);
-// 		res.status(500).send('Unexpected error');
-// 	}
-// };
-
+// para subir documentos .pdf a los productos de los vendedores
 exports.docs = async (req, res) => {
 	try {
 		// params
@@ -535,13 +470,11 @@ exports.docs = async (req, res) => {
 		// ask for params
 		if (!sellerId || !showRoomId || !productId) {
 			return res.status(400).send('Missing required query parameters');
-		}
-
+		} 
 		// Subida del PDF
 		let filePath = '';
 		let filename = '';
 		let mimetype = '';
-
 		// pdf upload
 		await new Promise((resolve, reject) => {
 			const busboy = Busboy({
@@ -598,18 +531,14 @@ exports.docs = async (req, res) => {
 
 			busboy.end(req.body);
 		});
-
 		// Leer y procesar el PDF
 		const pdfBuffer = fs.readFileSync(filePath);
 		const pdfData = await pdfParse(pdfBuffer);
 		const pdfText = pdfData.text;
-
 		// Generar embeddings desde OpenAI
 		const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
-
 		// Ruta para guardar el archivo JSON
-		const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}.json`;
-
+		const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-embeddings.json`;
 		// Leer el archivo JSON existente o crear uno nuevo
 		let embeddingsData = [];
 		try {
@@ -622,20 +551,14 @@ exports.docs = async (req, res) => {
 			}
 		} catch (error) {
 			console.log('No se encontró un archivo existente, se creará uno nuevo.');
-		}
-
+		} 
 		// Actualizar array de embeddings con data
 		embeddingsData.push({ productId, embeddings: newEmbeddings });
-
 		const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
 		fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
-
 		// Subir archivo actualizado con embeddings
 		await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
 		console.log('Embeddings actualizados y subidos con éxito.');
-
-		// Guardar la ruta del archivo en la colección de sellers en Firestore
-		saveUrlFromEmbeddingsAndDocsOfProductsFromSellers(tempFilePath,sellerId)
 		// send res
 		res.status(200).send("Embeddings generados y archivo subido con éxito.");
 	} catch (err) {
