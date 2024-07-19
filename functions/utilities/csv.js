@@ -6,7 +6,7 @@ const csv = require('csv-parser');
 // convert excel to csv
 exports.convertExcelToCSV = async (filepath) => {
     try {
-        console.log('convertExcelToCSVAndCreateNewPath');
+        console.log('convertExcelToCSV');
         const xlsx = require('xlsx');
 
         // Lee el archivo Excel
