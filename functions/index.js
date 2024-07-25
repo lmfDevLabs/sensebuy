@@ -111,7 +111,7 @@ const {
 
 // chats
 const {
-  
+  chatWithOpenAIAndAlgolia
   } = require('./handlers/chats/chats');
 
 // utilities
@@ -288,7 +288,8 @@ app.post(`/${apiVersion}/queries2`, firebaseAuth, queriesOpenAIAndAlgolia);
 // app.put(`/${apiVersion}/chats/:chatId`, firebaseAuth, updateChat);
 // // 5-DELETE /chats/:id: Elimina un chat específico.
 // app.delete(`/${apiVersion}/chats/:chatId`, firebaseAuth, deleteChat);
-
+// 6-POST /${apiVersion}/chats/:chatId/session/:sessionId accede a un chat con una busqueda en algolia
+app.post('/${apiVersion}/chats/session/:sessionId',firebaseAuth, chatWithOpenAIAndAlgolia)
 
 // /* PRODUCTS SUGESTIONS */
 // // super admin
@@ -360,113 +361,117 @@ exports.listAnyNewEmbeddingOnShowRoomCollection = functions.firestore
 });
 
 // to create docs embeddings after the product creation
-// exports.toCreateProductsDocsEmbeddings = functions.firestore
-//   .document('products/{productId}')
-//   .onCreate(async (snap, context) => {
-//     console.log('toCreateProductsDocsEmbeddings');
-//     // data from product
-//     const newProduct = snap.data();
-//     const sellerId = newProduct.sellerData.sellerId;
-//     const companyName = newProduct.sellerData.companyName;
-//     const pdfUrl = newProduct.pdf; 
-//     const showRoomId = newProduct.showRoomData.showRoomId;
-//     const productId = context.params.productId;
-
-//     try {
-//       // pdf read
-//       const pdfBuffer = await downloadDocFromExternalUrl(pdfUrl);
-//       const pdfData = await pdfParse(pdfBuffer);
-//       const pdfText = pdfData.text;
-//       // embeddings
-//       const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
-//       // path to save on cs
-//       const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-${companyName}-embeddings.json`;
-//       // array to embeddings
-//       let embeddingsData = [];
-//       try {
-//         // cs part
-//         const [fileExists] = await storage.bucket(bucketName).file(jsonFilePath).exists();
-//         if (fileExists) {
-//           const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
-//           await storage.bucket(bucketName).file(jsonFilePath).download({ destination: tempFilePath });
-//           const fileContent = fs.readFileSync(tempFilePath, 'utf8');
-//           embeddingsData = JSON.parse(fileContent);
-//         }
-//       } catch (error) {
-//         console.log('No se encontró un archivo existente, se creará uno nuevo.');
-//       }
-//       // update embeddings
-//       embeddingsData.push({ productId, embeddings: newEmbeddings });
-//       const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
-//       // write on file of embeddings
-//       fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
-//       console.log({jsonFilePath})
-//       await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
-//       console.log('Embeddings actualizados y subidos con éxito.');
-//     } catch (error) {
-//       console.error('Error:', error);
-//     }
-//   });
-
 exports.toCreateProductsDocsEmbeddings = functions.firestore
   .document('products/{productId}')
   .onCreate(async (snap, context) => {
-    console.log('toCreateProductsDocsEmbeddings');
-    // data
+    console.log('toCreateProductsDocsEmbeddings triggered');
+    
+    // Data
     const newProduct = snap.data();
     const sellerId = newProduct.sellerData.sellerId;
     const companyName = newProduct.sellerData.companyName;
-    const pdfUrl = newProduct.pdf; 
+    const pdfUrl = newProduct.pdf;
     const showRoomId = newProduct.showRoomData.showRoomId;
     const productId = context.params.productId;
-    // mutex
+    
+    // Mutex
     const mutex = new Mutex();
-    // bucket
+    
+    // Bucket
     const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
-    try {
-      // Leer pdf
-      const pdfBuffer = await downloadDocFromExternalUrl(pdfUrl);
-      const pdfData = await pdfParse(pdfBuffer);
-      const pdfText = pdfData.text;
+    
+    // Data after buffer
+    let pdfText = null;
 
-      // Generar embeddings
-      const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
-
-      // Ruta para guardar en CS
-      const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-${companyName}-embeddings.json`;
-      let embeddingsData = [];
-
-      await mutex.runExclusive(async () => {
-        try {
-          // Leer el archivo JSON existente o crear uno nuevo
-          const [fileExists] = await bucket.file(jsonFilePath).exists();
-          console.log({fileExists})
-          if (fileExists) {
-            console.log('Se encontro archivo existente, no se creará uno nuevo.');
-            const tempFilePath = path.join(os.tmpdir(),`${sellerId}.json`);
-            await bucket.file(jsonFilePath).download({ destination: tempFilePath });
-            const fileContent = fs.readFileSync(tempFilePath, 'utf8');
-            embeddingsData = JSON.parse(fileContent);
-          } else {
-            console.log('No se encontró un archivo existente, se creará uno nuevo.');
-          }
-        } catch (error) {
-          console.error('Error:', error);
+    // Función para manejar la descarga y procesamiento del PDF
+    const handlePdfDownload = async (pdfUrl) => {
+      try {
+        const pdfBuffer = pdfUrl ? await downloadDocFromExternalUrl(pdfUrl) : null;
+        if (pdfBuffer) {
+          console.log('PDF descargado con éxito.');
+          const pdfData = await pdfParse(pdfBuffer);
+          return pdfData.text;
+        } else {
+          console.log('No se proporcionó una URL de PDF válida.');
+          return null;
         }
+      } catch (error) {
+        console.error('Error al descargar o procesar el PDF:', error);
+        return null;
+      }
+    };
 
-        // Actualizar embeddings
-        embeddingsData.push({ productId, embeddings: newEmbeddings });
-        const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
-        fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
+    let success = false;
+    let message = '';
 
-        // Subir archivo actualizado con embeddings
-        await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
-        console.log('Embeddings actualizados y subidos con éxito.');
-      });
+    try {
+      // Llamar a la función para manejar la descarga del PDF y obtener el texto
+      pdfText = await handlePdfDownload(pdfUrl);
+
+      // Generar embeddings solo si hay texto del PDF
+      if (pdfText) {
+        console.log('Generando embeddings...');
+        const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
+        console.log('Embeddings generados:', newEmbeddings);
+
+        // Ruta para guardar en CS
+        const jsonFilePath = `${showRoomId}/docs_sellers/${sellerId}/${sellerId}-${companyName}-embeddings.json`;
+        let embeddingsData = [];
+
+        // Mutex
+        await mutex.runExclusive(async () => {
+          try {
+            const [fileExists] = await bucket.file(jsonFilePath).exists();
+            console.log('Archivo existente:', fileExists);
+            
+            if (fileExists) {
+              const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+              await bucket.file(jsonFilePath).download({ destination: tempFilePath });
+              const fileContent = fs.readFileSync(tempFilePath, 'utf8');
+              embeddingsData = JSON.parse(fileContent);
+              console.log('Datos de embeddings existentes:', embeddingsData);
+            } else {
+              console.log('No se encontró un archivo existente, se creará uno nuevo.');
+            }
+          } catch (error) {
+            console.error('Error al leer el archivo de embeddings:', error);
+          }
+
+          // Actualizar embeddings
+          embeddingsData.push({
+            companyName,
+            sellerId,
+            productId,
+            vector: newEmbeddings.data[0]
+          });
+          const tempFilePath = path.join(os.tmpdir(), `${sellerId}.json`);
+          fs.writeFileSync(tempFilePath, JSON.stringify(embeddingsData, null, 2));
+          console.log('Embeddings actualizados:', embeddingsData);
+
+          // Subir archivo actualizado con embeddings
+          await uploadFileToCloudStorage(tempFilePath, jsonFilePath);
+          console.log('Embeddings actualizados y subidos con éxito.');
+        });
+
+        success = true;
+        message = 'Embeddings generados y subidos con éxito.';
+      } else {
+        console.log('No se generaron embeddings porque no se pudo obtener el texto del PDF.');
+        success = true;
+        message = 'No se generaron embeddings porque no se pudo obtener el texto del PDF.';
+      }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error en el procesamiento:', error);
+      success = false;
+      message = 'Error en el procesamiento: ' + error.message;
     }
-  }); 
+
+    // Enviar respuesta al usuario
+    return {
+      success,
+      message
+    };
+  });
 
 // detect traffic of gps coords from buyers in topic events and db sync
 exports.detectTelemetryEventsForAllDevices = functions.pubsub.topic('telemetry').onPublish(async (message) => {
