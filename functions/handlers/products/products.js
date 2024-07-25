@@ -402,21 +402,34 @@ exports.xlsx3 = async (req, res) => {
 						data: extractDataFromCSVFile,
 						collection: 'products',
 						extras: {
-							sellerId: sellerId,
-							companyName: res.locals.companyData.name,
+							sellerId:sellerId,
+							companyName:res.locals.companyData.name,
 							coords:res.locals.coordsData,
 							showRoomId
 						}
 					} 
-					const productsToFirestore = await addDataToFirestore(optionsDB); 
+					const productIdToFirestore = await addDataToFirestore(optionsDB); 
 					// process csv and generate embeddings
-					const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(extractDataFromCSVFile, sellerId);
+					const createEmbeddingsOfProducts = await processCSVAndGenerateEmbeddings(
+						extractDataFromCSVFile, 
+						// new
+						optionsDB.extras.sellerId,
+						optionsDB.extras.companyName,
+						productIdToFirestore
+					);
 					// check for if embeddings exist
 					if(createEmbeddingsOfProducts.length > 0) {
 						// print 
 						// console.log("there are embeddings");
 						// save embeddings on firestore
-						const embbedingsToFirestore = await saveEmbeddingsOnFirestore(createEmbeddingsOfProducts,showRoomId);
+						const embbedingsToFirestore = await saveEmbeddingsOnFirestore(
+							createEmbeddingsOfProducts,
+							showRoomId,
+							// // new
+							// optionsDB.extras.sellerId,
+							// optionsDB.extras.companyName,
+							// productIdToFirestore
+						);
 						// save embeddings on bucket
 						const arrayOfEmbeddings = await createArrayWithEmbeddings(createEmbeddingsOfProducts);
 						// print
