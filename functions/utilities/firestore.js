@@ -29,9 +29,10 @@ const outputTags = async (obj) => {
 };
 
 // add data to fb
-exports.addDataToFirestore = async (optionsDB) => {
+const addDataToFirestore = async (optionsDB) => {
     // Array
     const commitBatches = [];
+    const documentIds = [];
     try {
         // print
         console.log('addDataToFirestore');
@@ -39,7 +40,11 @@ exports.addDataToFirestore = async (optionsDB) => {
         let batch = db.batch();
         // Loop over data
         await optionsDB.data.forEach(async(doc, index) => {
-            const docRef = db.collection(optionsDB.collection).doc(); // Crea un nuevo documento para cada producto
+             // Crea un nuevo documento para cada producto
+            const docRef = db.collection(optionsDB.collection).doc();
+            // Guarda el ID del documento creado
+            documentIds.push(docRef.id); 
+            // mapper
             switch(optionsDB.collection){
                 case 'products':
                 let dataObject = {
@@ -72,15 +77,16 @@ exports.addDataToFirestore = async (optionsDB) => {
     }
     // Espera a que todos los batches se hayan enviado
     await Promise.all(commitBatches);
+    // Devuelve los IDs de los documentos creados
+    return documentIds;
 }
+
 // save embeddings in firestore
-exports.saveEmbeddingsOnFirestore = async (embeddings,showRoomId) => {
-    // Aquí deberías guardar los embeddings en Vertex AI
+const saveEmbeddingsOnFirestore = async (embeddings, showRoomId) => {
     console.log('saveEmbeddingsOnFirestore:');
-    // Aquí deberías guardar los embeddings en Firestore
     const commitBatches = [];
     const batch = db.batch();
-    try{
+    try {
         const embeddingsCollectionRef = db
             .collection('showRooms')
             .doc(showRoomId)
@@ -88,13 +94,19 @@ exports.saveEmbeddingsOnFirestore = async (embeddings,showRoomId) => {
 
         embeddings.forEach((embedding) => {
             const docRef = embeddingsCollectionRef.doc(); // Create a new document for each embedding
-            batch.set(docRef, embedding);
+            const { companyName, sellerId, productId, ...vector } = embedding; // Destructure to separate vector
+            batch.set(docRef, {
+                vector,
+                companyName,
+                sellerId,
+                productId,
+            });
         });
-    }catch(err){
+    } catch (err) {
         console.error('Error saveEmbeddingsOnFirestore:', err);
     }
     commitBatches.push(batch.commit());
-}; 
+};
 
 // to crop last part of the url sellers docs path
 const removeLastPathSegment = (url) => {
@@ -109,7 +121,7 @@ const removeLastPathSegment = (url) => {
 }
 
 // to save url path to file embeddings and docs from sellers products
-exports.saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,sellerId) => {
+const saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,sellerId) => {
     // Obtener la URL del archivo JSON subido
     const fileUrl = `${process.env.URL_OF_CLOUD_STORAGE_BUCKET}${jsonFilePath}`;
     const cropUrl = removeLastPathSegment(fileUrl)
@@ -121,4 +133,45 @@ exports.saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,
     console.log('URL del archivo JSON guardada en el documento del vendedor en Firestore.');
     
 } 
+
+// to save chat messages
+const createChatMessage = async (userId, sessionId, role, content) => {
+    // timestamp
+    const timestamp = new Date().toISOString();
+    
+    // db
+    try {
+        await db.collection('chats').doc(userId).collection('sesiones').doc(sessionId).collection('messages').add({
+            role: role,
+            content: content,
+            timestamp: timestamp,
+        });
+        console.log('Mensaje guardado en Firebase');
+    } catch (error) {
+        console.error('Error al guardar el mensaje:', error);
+        throw error;
+    }
+}
+
+// to get chat messages
+const getChatMessages = async (userId, sessionId) => {
+    try {
+        const messages = await db.collection('chats').doc(userId).collection('sesiones').doc(sessionId).collection('messages').orderBy('timestamp').get();
+        const messagesData = messages.docs.map(doc => doc.data());
+        return messagesData;
+    } catch (error) {
+        console.error('Error al obtener mensajes:', error);
+        throw error;
+    }
+}
+
+// module exports
+module.exports = {
+    outputTags,
+    addDataToFirestore,
+    saveEmbeddingsOnFirestore,
+    saveUrlFromEmbeddingsAndDocsOfProductsFromSellers,
+    createChatMessage,
+    getChatMessages
+};
 
