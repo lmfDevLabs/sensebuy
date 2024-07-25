@@ -53,19 +53,29 @@ const getEmbeddingsFromOpenAI = async (text) => {
 };  
 
 // Función para procesar el CSV y generar embeddings
-const processCSVAndGenerateEmbeddings = async (data,id) => {
+const processCSVAndGenerateEmbeddings = async (
+        data,
+        sellerId,
+        companyName,
+        productIdToFirestore // array
+    ) => {
     try {  
         // print  
         console.log('processCSVAndGenerateEmbeddings:');
         // Array para almacenar los embeddings
         const embeddings = [];
         // Procesa cada producto y obtiene su embedding
-        for (const productData of data) {
+        for (let i = 0; i < data.length; i++) {
             // console.log('Product data:', productData);
             // Prepara el texto del producto para el embedding y obtén el embedding
-            const embedding = await getEmbeddingsFromOpenAI(await prepareTextForEmbedding(productData));
-            if (embedding) {
-                embeddings.push({ id, embedding }); // Asocia el embedding con el ID del vendedor
+            const embedding = await getEmbeddingsFromOpenAI(await prepareTextForEmbedding(data[i]));
+            if (embedding) { 
+                embeddings.push({
+                    companyName,
+                    sellerId,
+                    embedding,
+                    productId:productIdToFirestore[i]
+                }); // Asocia el embedding con el ID del vendedor
             }
         }
         return embeddings; // Retorna el embedding
@@ -88,10 +98,13 @@ const createArrayWithEmbeddings = async (embeddings) => {
                 // Accede al valor de cada elemento del array data 
                 for (const value of item.embedding.data) {
                     // Agrega el valor (escape special characters if needed)
-                    csvContent.push(value);
+                    csvContent.push({
+                        vector:value,
+                        sellerId:item.sellerId,
+                        companyName:item.companyName,
+                        productId:item.productId,
+                    }); 
                 }
-                // Agrega el ID del vendedor al final del array
-                csvContent.push(item.id);
             } else {
                 console.error('Error: item.embedding.data is not an array or is empty', item.embedding.data);
             }
