@@ -96,7 +96,7 @@ const saveEmbeddingsOnFirestore = async (embeddings, showRoomId) => {
             const docRef = embeddingsCollectionRef.doc(); // Create a new document for each embedding
             const { companyName, sellerId, productId, ...vector } = embedding; // Destructure to separate vector
             batch.set(docRef, {
-                vector,
+                vector:vector.embedding.data[0],
                 companyName,
                 sellerId,
                 productId,
@@ -135,18 +135,28 @@ const saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,se
 } 
 
 // to save chat messages
-const createChatMessage = async (userId, sessionId, role, content) => {
-    // timestamp
+const createChatMessage = async (userId, sessionId, role, content, intention) => {
+    console.log('createChatMessage')
     const timestamp = new Date().toISOString();
-    
-    // db
     try {
-        await db.collection('chats').doc(userId).collection('sesiones').doc(sessionId).collection('messages').add({
-            role: role,
-            content: content,
-            timestamp: timestamp,
-        });
-        console.log('Mensaje guardado en Firebase');
+        const dbRef = await db.collection('chats').doc(userId).collection('sessions').doc(sessionId).collection('messages')
+        // ask for role
+        if(role === "assistant"){
+            dbRef.add({
+                role: role,
+                content: content,
+                intention,
+                timestamp: timestamp,
+            });
+            console.log('Mensaje guardado en Firebase');
+        } else if (role === "user"){
+            dbRef.add({
+                role: role,
+                content: content,
+                timestamp: timestamp,
+            });
+            console.log('Mensaje guardado en Firebase');
+        }
     } catch (error) {
         console.error('Error al guardar el mensaje:', error);
         throw error;
@@ -156,9 +166,8 @@ const createChatMessage = async (userId, sessionId, role, content) => {
 // to get chat messages
 const getChatMessages = async (userId, sessionId) => {
     try {
-        const messages = await db.collection('chats').doc(userId).collection('sesiones').doc(sessionId).collection('messages').orderBy('timestamp').get();
-        const messagesData = messages.docs.map(doc => doc.data());
-        return messagesData;
+        const messages = await db.collection('chats').doc(userId).collection('sessions').doc(sessionId).collection('messages').orderBy('timestamp').get();
+        return messages.docs.map(doc => doc.data());
     } catch (error) {
         console.error('Error al obtener mensajes:', error);
         throw error;
