@@ -6,7 +6,6 @@ const fs = require('fs');
 // functions
 const { onRequest } = require("firebase-functions/v2/https");
 const { setGlobalOptions } = require("firebase-functions/v2");
-// db
 const { 
   admin,
   auth,
@@ -35,7 +34,7 @@ const { Mutex } = require('async-mutex');
 // middleware for auth
 const firebaseAuth = require('./firebase/firebaseAuth')
 // middleware for coords of statics
-const coordsOfSellers = require('./utilities/coordsOfSellers')
+const coordsOfSellers = require('./utilities/middlewares/coordsOfSellers')
 
 // ////////////////////////////////////////// HANDLERS //////////////////////////////////////////////////
 // auth
@@ -111,6 +110,7 @@ const {
 
 // chats
 const {
+  chats,
   chatWithOpenAIAndAlgolia
   } = require('./handlers/chats/chats');
 
@@ -121,11 +121,7 @@ const {
 
 const {
   downloadDocFromExternalUrl
-} = require('./utilities/docs');
-
-const {
-  saveUrlFromEmbeddingsAndDocsOfProductsFromSellers
-} = require('./utilities/firestore');
+} = require('./utilities/externalDocs');
 
 const {
   uploadFileToCloudStorage
@@ -283,13 +279,13 @@ app.post(`/${apiVersion}/queries2`, firebaseAuth, queriesOpenAIAndAlgolia);
 
 // // user admin
 // // 3-POST /chats: Crea un nuevo chat.
-// app.post(`/${apiVersion}/chats`, firebaseAuth, chats);
+app.post(`/${apiVersion}/chats`, firebaseAuth, chats);
 // // 4-PUT /chats/:id: Actualiza un chat específico.
 // app.put(`/${apiVersion}/chats/:chatId`, firebaseAuth, updateChat);
 // // 5-DELETE /chats/:id: Elimina un chat específico.
 // app.delete(`/${apiVersion}/chats/:chatId`, firebaseAuth, deleteChat);
-// 6-POST /${apiVersion}/chats/:chatId/session/:sessionId accede a un chat con una busqueda en algolia
-app.post('/${apiVersion}/chats/session/:sessionId',firebaseAuth, chatWithOpenAIAndAlgolia)
+// 6-POST /${apiVersion}/chats/:chatId/session/:sessionId accede a un chat ya creado con una busqueda en algolia
+// app.post('/${apiVersion}/chats/session/:sessionId',firebaseAuth, chatWithOpenAIAndAlgolia)
 
 // /* PRODUCTS SUGESTIONS */
 // // super admin
@@ -322,7 +318,7 @@ exports.updateShowRoomOnProductCreate = functions.firestore
         if (newProduct.tags && Array.isArray(newProduct.tags)) {
             try {
                 // ID del showroom a actualizar
-                const showRoomId = newProduct.sellerData.showRoom;
+                const showRoomId = newProduct.showRoomData.showRoomId;
 
                 // Referencia al documento del showroom
                 const showRoomRef = admin.firestore().doc(`showRooms/${showRoomId}`);
