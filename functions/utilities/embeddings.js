@@ -44,7 +44,7 @@ const getEmbeddingsFromOpenAI = async (text) => {
             encoding_format: "float",
         });
         // Asegúrate de acceder correctamente a la respuesta para obtener el embedding
-        // console.log('Embedding:', response);
+        console.log(JSON.stringify(response));
         return response // Ajusta según la estructura de la respuesta
     } catch (error) {
         console.error('Error getEmbeddingsFromOpenAI:', error);
@@ -83,7 +83,7 @@ const processCSVAndGenerateEmbeddings = async (
         console.error('Error processCSVAndGenerateEmbeddings:', error);
     }
 };
-
+ 
 // make array with embeddings to save on bucket
 const createArrayWithEmbeddings = async (embeddings) => {
     
@@ -155,11 +155,17 @@ const updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
     }
 };
 
+// vector search
+const searchInVectorDB = async (userQuery) => {
+    console.log(`searchInVectorDB: ${userQuery}`)
+}
+
 // module exports
 module.exports = {
     prepareTextForEmbedding,
     getEmbeddingsFromOpenAI,
     processCSVAndGenerateEmbeddings,
     createArrayWithEmbeddings,
-    updateGlobalEmbeddingsFile
+    updateGlobalEmbeddingsFile,
+    searchInVectorDB
 };
