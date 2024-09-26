@@ -1,7 +1,7 @@
 // node modules
 const https = require('https');
 
-exports.downloadDocFromExternalUrl = async (url) => {
+const downloadDocFromExternalUrl = async (url) => {
   console.log("downloadDocFromExternalUrl");
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
@@ -24,4 +24,9 @@ exports.downloadDocFromExternalUrl = async (url) => {
       response.on('error', reject);
     }).on('error', reject); // Catch errors from https.get
   });
+};
+
+// module exports
+module.exports = {
+  downloadDocFromExternalUrl
 };
