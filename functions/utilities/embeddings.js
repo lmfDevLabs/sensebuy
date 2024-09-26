@@ -2,6 +2,8 @@ const fs = require('fs').promises; // Importa el módulo 'fs' con promesas
 // open ai
 const { OpenAI } = require('openai');
 
+
+//////// PRE OPS /////////////
 // remueve las claves que no queremos en el embedding
 const prepareTextForEmbedding = (productData) => {
     try {
@@ -27,30 +29,6 @@ const prepareTextForEmbedding = (productData) => {
         return ''; // Devuelve una cadena vacía en caso de error.
     }
 };
-// Función para obtener embeddings con OpenAI
-const getEmbeddingsFromOpenAI = async (text) => {
-    
-    try {
-        // print
-        console.log('getEmbeddingsFromOpenAI:');
-        // Instancia de OpenAI
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
-        // Obtiene el embedding del texto
-        const response = await openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: text,
-            encoding_format: "float",
-        });
-        // Asegúrate de acceder correctamente a la respuesta para obtener el embedding
-        console.log(JSON.stringify(response));
-        return response // Ajusta según la estructura de la respuesta
-    } catch (error) {
-        console.error('Error getEmbeddingsFromOpenAI:', error);
-        return null; // O maneja el error según prefieras
-    }
-};  
 
 // Función para procesar el CSV y generar embeddings
 const processCSVAndGenerateEmbeddings = async (
@@ -83,7 +61,7 @@ const processCSVAndGenerateEmbeddings = async (
         console.error('Error processCSVAndGenerateEmbeddings:', error);
     }
 };
- 
+
 // make array with embeddings to save on bucket
 const createArrayWithEmbeddings = async (embeddings) => {
     
@@ -155,10 +133,111 @@ const updateGlobalEmbeddingsFile = async (embeddingsFilePath, embeddings) => {
     }
 };
 
-// vector search
+///////// DEALING OPS /////////////
+// Función para obtener embeddings con OpenAI
+const getEmbeddingsFromOpenAI = async (text) => {
+    
+    try {
+        // print
+        console.log('getEmbeddingsFromOpenAI:');
+        // Instancia de OpenAI
+        const openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        });
+        // Obtiene el embedding del texto
+        const response = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: text,
+            encoding_format: "float",
+        });
+        // Asegúrate de acceder correctamente a la respuesta para obtener el embedding
+        console.log(response);
+        return response // Ajusta según la estructura de la respuesta
+    } catch (error) {
+        console.error('Error getEmbeddingsFromOpenAI:', error);
+        return null; // O maneja el error según prefieras
+    }
+};  
+
+// Objeto para almacenar embeddings temporales en memoria
+const tempEmbeddingsStore = {};
+
+// Función para buscar en la base de datos vectorial temporal
+const saveMessageWithTempEmbedding = async (sessionId, role, content) => {
+    // no nlp aqui en js
+    //const preprocessedContent = preprocessText(content);
+    const embedding = await getEmbeddingsFromOpenAI(content); // api nlp
+
+    if (!tempEmbeddingsStore[sessionId]) {
+        tempEmbeddingsStore[sessionId] = [];
+    }
+ 
+    const messageData = {
+        role,
+        content,
+        embedding,
+    };
+
+    if (role === "assistant" && intention) {
+        messageData.intention = intention;
+    }
+
+    tempEmbeddingsStore[sessionId].push(messageData);
+    console.log('Mensaje guardado temporalmente con embedding');
+    console.log({tempEmbeddingsStore})
+
+};
+
+// Función para limpiar los embeddings temporales al final de la sesión
+const clearTempEmbeddingsStore = (sessionId) => {
+    delete tempEmbeddingsStore[sessionId];
+    console.log(`Embeddings temporales para la sesión ${sessionId} eliminados`);
+};
+
+// Función para buscar en la base de datos vectorial temporal
+const searchInTempVectorDB = async (sessionId, userQuery) => {
+    const sessionEmbeddings = tempEmbeddingsStore[sessionId] || [];
+
+    const preprocessedQuery = preprocessText(userQuery);
+    const userEmbedding = await generateEmbedding(preprocessedQuery);
+
+    // Crear un índice faiss
+    const dimension = userEmbedding.length;
+    const index = new faiss.IndexFlatL2(dimension);
+
+    // Agregar los embeddings de la sesión al índice
+    const embeddingsMatrix = sessionEmbeddings.map(msg => msg.embedding);
+    index.add(embeddingsMatrix);
+
+    // Buscar los 5 embeddings más similares
+    const { distances, indices } = index.search(userEmbedding, 5);
+    const results = indices.map(index => sessionEmbeddings[index]);
+
+    return results;
+};
+
+// Función para buscar en la base de datos vectorial
 const searchInVectorDB = async (userQuery) => {
-    console.log(`searchInVectorDB: ${userQuery}`)
-}
+    console.log("searchInVectorDB")
+    // api nlp call
+    try {
+        const response = await fetch('http://localhost:5000/test-connection', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            console.log(data.message);  // Debería imprimir "Connection successful!"
+        } else {
+            console.error('Error:', response.statusText);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+};
 
 // module exports
 module.exports = {
@@ -167,5 +246,9 @@ module.exports = {
     processCSVAndGenerateEmbeddings,
     createArrayWithEmbeddings,
     updateGlobalEmbeddingsFile,
-    searchInVectorDB
+    //
+    saveMessageWithTempEmbedding,
+    clearTempEmbeddingsStore,
+    searchInVectorDB,
+    searchInTempVectorDB
 };
