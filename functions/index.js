@@ -112,7 +112,14 @@ const {
 const {
   chats,
   chatWithOpenAIAndAlgolia
-  } = require('./handlers/chats/chats');
+} = require('./handlers/chats/chats');
+
+// whatsapp
+const {
+  getWhats,
+  postWhats
+} = require('./handlers/whatsapp/whatsapp');
+
 
 // utilities
 const {
@@ -124,8 +131,8 @@ const {
 } = require('./utilities/externalDocs');
 
 const {
-  uploadFileToCloudStorage
-} = require('./utilities/cloudStorage');
+  publishChatMessageForNlp
+} = require('./utilities/pub-sub');
 // //////////////////////////////////////////// +++++++ API REST ROUTES +++++++ ///////////////////////////////////////////
 
 // API Version
@@ -135,8 +142,9 @@ const apiVersion = "v1"
 setGlobalOptions({ maxInstances: 10 });
 
 // test
-app.get(`/${apiVersion}/test`, firebaseAuth, (req, res) => {
-  res.send('Hello from API REST' + " " + req.user.uid)
+app.get(`/${apiVersion}/test`, async (req, res) => {
+  const messageTest = await publishChatMessageForNlp('chats', { sessionId: '12345', userQuery: 'Hola, busco una camioneta 2024' });
+  // res.send('Hello from API REST' + " " + req.user.uid)
 })
 
 // // git data from sensebuy
@@ -286,6 +294,10 @@ app.post(`/${apiVersion}/chats`, firebaseAuth, chats);
 // app.delete(`/${apiVersion}/chats/:chatId`, firebaseAuth, deleteChat);
 // 6-POST /${apiVersion}/chats/:chatId/session/:sessionId accede a un chat ya creado con una busqueda en algolia
 // app.post('/${apiVersion}/chats/session/:sessionId',firebaseAuth, chatWithOpenAIAndAlgolia)
+ 
+// /* WHATSAPP */
+app.get(`/${apiVersion}/webhook`,getWhats)
+app.post(`/${apiVersion}/webhook`,postWhats)
 
 // /* PRODUCTS SUGESTIONS */
 // // super admin
@@ -301,6 +313,7 @@ app.post(`/${apiVersion}/chats`, firebaseAuth, chats);
 // app.put(`/${apiVersion}/products-sugestions/:sugestionId`, firebaseAuth, updateSugestion);
 // // 5-DELETE /products/sugestions/:id: Elimina un producto sugerido específico.
 // app.delete(`/${apiVersion}/products-sugestions/:sugestionId`, firebaseAuth, deleteSugestion);
+
 
 
 // export functions
@@ -485,3 +498,4 @@ exports.detectTelemetryEventsForAllDevices = functions.pubsub.topic('telemetry')
     console.error('Error saving message to Firestore:', error);
   }
 });
+
