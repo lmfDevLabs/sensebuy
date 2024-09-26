@@ -14,7 +14,7 @@ const BusBoy = require('busboy');
 const { 
     reduceSeller,
     validateCoordsData
-} = require('../../utilities/validation');
+} = require('../../utilities/sanitizers/validation');
  
 // Crea un nuevo vendedor asociado aun usuario tipo seller.
 exports.sellers = async (req, res) => { 
