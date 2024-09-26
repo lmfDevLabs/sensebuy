@@ -5,70 +5,103 @@ const {
 
 // utilities
 const { 
-    createChatMessage,  
-    getChatMessages
+    getChatMessages,
+    createChatMessage
 } = require('../../utilities/firestore');
 
 const { 
-    searchInAlgolia,  
-} = require('../../utilities/algolia');
+    saveMessageWithTempEmbedding,  
+} = require('../../utilities/embeddings');
 
 const { 
-    generateAIResponse,
     handleUserQuery 
-} = require('../../utilities/openAi');
+} = require('../../utilities/searchRouter');
+
+const { 
+    publishMessage 
+} = require('../../utilities/pub-sub');
 
 const chats = async (req, res) => {
+    // data del req
     const userId = req.user.uid;
     const userQuery = req.body.userQuery;
     let sessionId = req.body.sessionId;
 
     // Si no se proporciona un sessionId, creamos uno nuevo
+    let isNewSession = false;
     if (!sessionId || sessionId.trim() === "") {
         const newSessionDoc = db.collection('chats').doc(userId).collection('sessions').doc();
         sessionId = newSessionDoc.id;
+        isNewSession = true;
     }
 
+    // arr de mensajes
     let messages = [];
 
     try {
-        // Guardar el mensaje inicial del usuario
-        await createChatMessage(userId, sessionId, 'user', userQuery);
+        // Guardar mensaje inicial del usuario en Firebase y en base de datos temp vectorial
+        const dataInitialMessage = {
+            userId, 
+            sessionId, 
+            role: 'user', 
+            content: userQuery
+        };
+        await createChatMessage(dataInitialMessage);
+        // await saveMessageWithTempEmbedding(userId, sessionId, 'user', userQuery);
         
-        // Obtener los mensajes de chat anteriores
-        const previousMessages = await getChatMessages(userId, sessionId);
-        
-        // Añadir los mensajes anteriores al array de mensajes
-        previousMessages.forEach(msg => {
-            messages.push({
-                role: msg.role,
-                content: msg.content,
-                intention:msg.intention
+        // Obtener los mensajes de chat anteriores solo si no es una nueva sesión
+        if (!isNewSession) {
+            const previousMessages = await getChatMessages(userId, sessionId);
+
+            // Añadir los mensajes anteriores al array de mensajes
+            previousMessages.forEach(msg => {
+                messages.push({
+                    role: msg.role,
+                    content: msg.content
+                });
             });
-        });
+            console.log("Previous messages:", previousMessages);
+        }
 
-        // Añadir el mensaje del usuario actual al array de mensajes
-        messages.push({ role: 'user', content: userQuery });
-
+        // Añadir el mensaje del usuario actual al array de mensajes solo si no es duplicado
+        if (!isNewSession || messages.length === 0 || messages[messages.length - 1].content !== userQuery) {
+            messages.push({ 
+                role: 'user', 
+                content: userQuery 
+            });
+        }
+        // console.log("Messages before handling user query:", messages);
         // Generar respuesta del asistente basado en la intención clasificada
-        const { response: assistantResponse, intention } = await handleUserQuery(messages);
-
+        const { intention, fullRes, response } = await handleUserQuery(sessionId, messages);
+        // console.log("Response from handleUserQuery:", { intention, fullRes, response });
         // Guardar la respuesta del asistente en Firebase
-        await createChatMessage(userId, sessionId, 'assistant', assistantResponse, intention);
-
+        const dataOtherMessage = {
+            userId, 
+            sessionId, 
+            role: 'assistant', 
+            content: response === "Lo siento, no pude encontrar como contestar a tu solicitud." ? fullRes : response,
+        };
+        await createChatMessage(dataOtherMessage);
         // Añadir la respuesta del asistente al array de mensajes
-        messages.push({ role: 'assistant', content: assistantResponse, intention });
-        // console.log({messages})
+        messages.push({ 
+            role: dataOtherMessage.role, 
+            content: dataOtherMessage.content 
+        });
+        // console.log("Messages after adding assistant response:", messages);
         // Responder con los mensajes obtenidos y la intención
-        res.json({ sessionId, intention });
+        res.json({ sessionId, messages, intention });
+
+        // Si la intención es document_search, continuar la conversación
+        if (intention === 'document_search') {
+            const followUpQuestion = "¿Puedes proporcionar más detalles sobre el tipo de vehículo que buscas? (e.g., tamaño, capacidad, características específicas)";
+            // pub-sub publisher
+            await publishChatMessageForNlp('chats', { sessionId, content: userQuery  });
+        }
+
     } catch (error) {
         console.error('Error handling chat entry:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
-
-module.exports = {
-    chats
 };
 
 // User queries with OpenAI and Algolia
@@ -165,3 +198,7 @@ module.exports = {
 //         res.status(500).json({ error: error.message });
 //     }
 // } 
+
+module.exports = {
+    chats
+};
