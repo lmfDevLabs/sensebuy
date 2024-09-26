@@ -3,31 +3,22 @@ const {
     db,  
 } = require('../firebase/admin');
 
-// Método para extraer valores de un objeto y asegurar que son strings
-const outputTags = async (obj) => {
-    console.log('outputTaxonomy');
-    let arrValues = [];
+// utilities
+const { 
+    preprocessText,  
+} = require('./nlp');
 
-    // Define las llaves que quieres excluir
-    const excludeKeys = ['description', 'pics', 'pdf']; // Llaves a excluir
+const { 
+    getEmbeddingsFromOpenAI,  
+} = require('./embeddings');
 
-    // Recorre cada par llave-valor en el objeto
-    await Object.entries(obj).forEach(([key, value]) => {
-        // Excluye las llaves especificadas
-        if (!excludeKeys.includes(key)) {
-            // Si el valor es una cadena con comas, lo dividimos y agregamos cada parte al arreglo de valores
-            if (typeof value === 'string' && value.includes(',')) {
-                const valuesArray = value.split(',').map(item => item.trim());
-                arrValues.push(...valuesArray);
-            } else {
-                arrValues.push(String(value)); // Aseguramos que todos los valores sean strings
-            }
-        }
-    });
+const { 
+    outputTags,  
+    removeLastPathSegment
+} = require('./common');
 
-    return arrValues;
-};
 
+///////// USERS - SELLERS
 // add data to fb
 const addDataToFirestore = async (optionsDB) => {
     // Array
@@ -97,7 +88,7 @@ const saveEmbeddingsOnFirestore = async (embeddings, showRoomId) => {
             const { companyName, sellerId, productId, ...vector } = embedding; // Destructure to separate vector
             batch.set(docRef, {
                 vector:vector.embedding.data[0],
-                companyName,
+                companyName, 
                 sellerId,
                 productId,
             });
@@ -107,18 +98,6 @@ const saveEmbeddingsOnFirestore = async (embeddings, showRoomId) => {
     }
     commitBatches.push(batch.commit());
 };
-
-// to crop last part of the url sellers docs path
-const removeLastPathSegment = (url) => {
-    // Encuentra la posición del último '/'
-    const lastSlashIndex = url.lastIndexOf('/');
-    // Si no hay '/', retorna la URL original
-    if (lastSlashIndex === -1) {
-        return url;
-    }
-    // Retorna la URL sin la última parte del path
-    return url.substring(0, lastSlashIndex);
-}
 
 // to save url path to file embeddings and docs from sellers products
 const saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,sellerId) => {
@@ -134,33 +113,84 @@ const saveUrlFromEmbeddingsAndDocsOfProductsFromSellers = async (jsonFilePath,se
     
 } 
 
-// to save chat messages
-const createChatMessage = async (userId, sessionId, role, content, intention) => {
-    console.log('createChatMessage')
+
+///////// USERS - BUYERS
+// Función para guardar el mensaje y su embedding en Firestore
+const saveMessageWithEmbedding = async (userId, sessionId, role, content, intention = null) => {
     const timestamp = new Date().toISOString();
+    const preprocessedContent = preprocessText(content);
+    const embedding = await getEmbeddingsFromOpenAI(preprocessedContent);
+
     try {
-        const dbRef = await db.collection('chats').doc(userId).collection('sessions').doc(sessionId).collection('messages')
-        // ask for role
-        if(role === "assistant"){
-            dbRef.add({
-                role: role,
-                content: content,
-                intention,
-                timestamp: timestamp,
-            });
-            console.log('Mensaje guardado en Firebase');
-        } else if (role === "user"){
-            dbRef.add({
-                role: role,
-                content: content,
-                timestamp: timestamp,
-            });
-            console.log('Mensaje guardado en Firebase');
+        const messageData = {
+            role: role,
+            content: content,
+            preprocessedContent: preprocessedContent,
+            timestamp: timestamp,
+            embedding: embedding,
+        };
+
+        if (role === "assistant" && intention) {
+            messageData.intention = intention;
         }
+
+        await db.collection('chats').doc(userId).collection('sessions').doc(sessionId).collection('messages').add(messageData);
+        console.log('Mensaje guardado en Firebase con embedding');
     } catch (error) {
-        console.error('Error al guardar el mensaje:', error);
+        console.error('Error al guardar el mensaje con embedding:', error);
         throw error;
     }
+};
+
+// to save chat messages
+const createChatMessage = async (data) => {
+        console.log('createChatMessage')
+        // extract 
+        const {
+            userId, 
+            sessionId, 
+            role, 
+            content
+            // userQuery,
+            // // data from res
+            // intention, 
+            // response, 
+            // fullRes
+        } = data
+        // time
+        const timestamp = new Date().toISOString();
+        try {
+            const dbRef = await db
+                .collection('chats')
+                .doc(userId)
+                .collection('sessions')
+                .doc(sessionId)
+                .collection('messages')
+            // ask for role
+            if(role === "assistant"){
+                dbRef.add({
+                    role,
+                    timestamp,
+                    content
+                    //
+                    // intention,
+                    // response,
+                    // fullRes
+                });
+                console.log('Mensaje guardado en Firebase para assistant');
+            } else if (role === "user"){
+                dbRef.add({
+                    role,
+                    // userQuery,
+                    timestamp,
+                    content
+                });
+                console.log('Mensaje guardado en Firebase para user');
+            }
+        } catch (error) {
+            console.error('Error al guardar el mensaje:', error);
+            throw error;
+        }
 }
 
 // to get chat messages
@@ -176,11 +206,11 @@ const getChatMessages = async (userId, sessionId) => {
 
 // module exports
 module.exports = {
-    outputTags,
     addDataToFirestore,
     saveEmbeddingsOnFirestore,
     saveUrlFromEmbeddingsAndDocsOfProductsFromSellers,
     createChatMessage,
-    getChatMessages
+    saveMessageWithEmbedding,
+    getChatMessages,
 };
 
