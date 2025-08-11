@@ -1,21 +1,8 @@
 // firebase 
-const { 
-    db,  
-} = require('../firebase/admin');
-
+import { db } from '../firebase/admin.js';
 // utilities
-const { 
-    preprocessText,  
-} = require('./nlp');
-
-const { 
-    getEmbeddingsFromOpenAI,  
-} = require('./embeddings');
-
-const { 
-    outputTags,  
-    removeLastPathSegment
-} = require('./common');
+import { getEmbeddingsFromOpenAI } from './embeddings.js';
+import { outputTags, removeLastPathSegment, removeUndefinedFields } from './common.js';
 
 
 ///////// USERS - SELLERS
@@ -47,12 +34,16 @@ const addDataToFirestore = async (optionsDB) => {
                         companyName:optionsDB.extras.companyName,
                     },
                     // metadata
-                    tags:await outputTags(doc), 
+                    tags: await outputTags(doc), 
                     // cords
                     coords:optionsDB.extras.coords,
                     createdAt:new Date().toISOString(),
                     ...doc
                 }
+
+                // Limpiar los undefined
+                dataObject = removeUndefinedFields(dataObject)
+
                 // pass data to the doc
                 batch.set(docRef, dataObject);
                 break;
@@ -69,7 +60,7 @@ const addDataToFirestore = async (optionsDB) => {
     // Espera a que todos los batches se hayan enviado
     await Promise.all(commitBatches);
     // Devuelve los IDs de los documentos creados
-    return documentIds;
+    return {documentIds}; 
 }
 
 // save embeddings in firestore
@@ -149,7 +140,7 @@ const createChatMessage = async (data) => {
         const {
             userId, 
             sessionId, 
-            role, 
+            role,  
             content
             // userQuery,
             // // data from res
@@ -204,8 +195,7 @@ const getChatMessages = async (userId, sessionId) => {
     }
 }
 
-// module exports
-module.exports = {
+export {
     addDataToFirestore,
     saveEmbeddingsOnFirestore,
     saveUrlFromEmbeddingsAndDocsOfProductsFromSellers,
