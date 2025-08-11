@@ -1,17 +1,19 @@
 // firebase 
-const { db, admin, storage } = require('../../firebase/admin');
+// import { db, admin, storage } from '../../firebase/admin.js';
+import { db, storage } from '../../firebase/admin.js';
 // open ai
-const { OpenAI } = require('openai');
-// dotenv
-require('dotenv').config();
+import { OpenAI } from 'openai';
 // algolia
-const algoliasearch = require('algoliasearch');
+import {algoliasearch} from 'algoliasearch';
+// dotenv
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Global array for keywords
 let globalKeywords = [];
 
 // User queries with OpenAI and Firebase with tags pool
-exports.queriesOpenAI = async (req, res) => {
+const queriesOpenAI = async (req, res) => {
     // OpenAI credentials
     const openai = new OpenAI({
         organization: process.env.OPENAI_ORGANIZATION,
@@ -131,7 +133,7 @@ exports.queriesOpenAI = async (req, res) => {
 };
 
 // User queries with OpenAI and Algolia
-exports.queriesOpenAIAndAlgolia = async (req, res) => {
+const queriesOpenAIAndAlgolia = async (req, res) => {
     // final response
     let assistantResponse = '';
     let delimiter = "###"
@@ -402,6 +404,10 @@ exports.queriesOpenAIAndAlgolia = async (req, res) => {
     
 }
 
+export {
+    queriesOpenAI,
+    queriesOpenAIAndAlgolia
+};
 
 
 
