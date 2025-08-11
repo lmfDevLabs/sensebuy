@@ -1,11 +1,17 @@
-///////// FIRESTORE 
 // Método para extraer valores de un objeto y asegurar que son strings
 const outputTags = async (obj) => {
-    console.log('outputTaxonomy');
+    console.log('outputTags');
     let arrValues = [];
 
     // Define las llaves que quieres excluir
-    const excludeKeys = ['description', 'pics', 'pdf']; // Llaves a excluir
+    const excludeKeys = [
+        'description', 
+        'pics', 
+        'pdf', 
+        'activeParagraph', 
+        'product_url',
+        'notes_seller'
+    ]; // Llaves a excluir
 
     // Recorre cada par llave-valor en el objeto
     await Object.entries(obj).forEach(([key, value]) => {
@@ -21,6 +27,7 @@ const outputTags = async (obj) => {
         }
     });
 
+    console.log({arrValues})
     return arrValues;
 };
 
@@ -36,8 +43,14 @@ const removeLastPathSegment = (url) => {
     return url.substring(0, lastSlashIndex);
 }
 
-// module exports
-module.exports = {
+const removeUndefinedFields = (obj) => {
+    return Object.fromEntries(
+        Object.entries(obj).filter(([_, v]) => v !== undefined)
+    );
+}
+
+export {
     outputTags,
-    removeLastPathSegment
+    removeLastPathSegment,
+    removeUndefinedFields
 };
