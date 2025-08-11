@@ -1,5 +1,5 @@
 // fetch
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 // Obtener variables de entorno desde tu servidor
 const { WEBHOOK_VERIFY_TOKEN, GRAPH_API_TOKEN, BUSINESS_PHONE_NUMBER_ID, PORT } = process.env;
@@ -83,7 +83,7 @@ const postWhats = async (req, res) => {
   res.sendStatus(200);
 }
 
-module.exports = {
+export{
     getWhats,
     postWhats
 };
