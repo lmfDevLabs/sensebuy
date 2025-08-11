@@ -1,40 +1,65 @@
-// node modules
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-// libs
-const Busboy = require('busboy');
-// pdf parse
-const pdfParse = require('pdf-parse');
-// utils
-// cloud storage
-const {
+// 🧩 Node built-in modules
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+// 🧪 External libraries
+import Busboy from 'busboy';
+import pdfParse from 'pdf-parse';
+
+// 🧠 Langsmith
+import { traceable } from 'langsmith/traceable';
+
+// cheerio
+import * as cheerio from 'cheerio';
+
+// ⚙️ Utilities
+
+// Cloud Storage
+import {
 	uploadFileToCloudStorage,
 	downloadFileOfCloudStorage,
-} = require('../../utilities/cloudStorage');
-// csv
-const {
-	convertExcelToCSV,
+} from '../../utilities/cloudStorage.js';
+
+// CSV
+import {
 	extractDataFromCSV,
-	updateGlobalCsvFile
-} = require('../../utilities/csv');
-// firestore
-const {
+} from '../../utilities/csv.js';
+
+// Firestore
+import {
 	addDataToFirestore,
 	saveEmbeddingsOnFirestore,
 	saveUrlFromEmbeddingsAndDocsOfProductsFromSellers
-} = require('../../utilities/firestore');
-// embedings
-const {
+} from '../../utilities/firestore.js';
+
+// Embeddings
+import {
 	processCSVAndGenerateEmbeddings,
 	getEmbeddingsFromOpenAI,
 	createArrayWithEmbeddings,
 	updateGlobalEmbeddingsFile
-} = require('../../utilities/embeddings');
+} from '../../utilities/embeddings.js';
+
+// External Docs
+import { 
+	convertExcelToCSV,  
+} from '../../utilities/externalDocs.js';
+
+// LLM
+import { 
+	generateParagraphForProduct,  
+	generateParagraphForProductWithLangChain
+} from '../../utilities/openAi.js';
+
+// Text Processing
+import { 
+	generateListOfKeyWordsOfProduct
+} from '../../utilities/textProcessing.js';
 
 
 //post products with only a .csv file
-exports.xlsx = async (req, res) => {
+const xlsx = async (req, res) => {
 	// upload file to firestore
 	const uploadFileToBucket = async (filepath, mimetype) => {
 			console.log('uploadFileToBucket');
@@ -273,7 +298,7 @@ exports.xlsx = async (req, res) => {
 }
 
 // post products with only a .csv file and do the embbedings part
-exports.xlsx2 = async (req, res) => {
+const xlsx2 = async (req, res) => {
 	// main
 	try {
 		if(req.user.type === "seller"){
@@ -351,7 +376,7 @@ exports.xlsx2 = async (req, res) => {
 }
 
 // post products with only a .csv file and do the complete embbedings part
-exports.xlsx3 = async (req, res) => {
+const xlsx3 = async (req, res) => {
 	try {
 		// check if the user can post on products collection
 		if(req.user.type === "seller"){
@@ -405,7 +430,7 @@ exports.xlsx3 = async (req, res) => {
 							sellerId:sellerId,
 							companyName:res.locals.companyData.name,
 							coords:res.locals.coordsData,
-							showRoomId
+							showRoomId 
 						}
 					} 
 					const productIdToFirestore = await addDataToFirestore(optionsDB); 
@@ -438,7 +463,7 @@ exports.xlsx3 = async (req, res) => {
 						const downloadGlobalEmbeddingsFileFromBucket = await downloadFileOfCloudStorage(showRoomCsvFilePath);
 						// print
 						// console.log('downloadGlobalCsvFileFromBucket:', downloadGlobalCsvFileFromBucket);
-						// update global csv file
+						// update global json file
 						const updateGlobalEmbeddingJsonFile = await updateGlobalEmbeddingsFile(downloadGlobalEmbeddingsFileFromBucket,arrayOfEmbeddings);
 						// upload xlsx file to cloud storage
 						const uploadJsonFileJustUpdatedToBucket = await uploadFileToCloudStorage(downloadGlobalEmbeddingsFileFromBucket, showRoomCsvFilePath, mimetype);
@@ -475,8 +500,332 @@ exports.xlsx3 = async (req, res) => {
 	}
 };
 
+// post products with only a .csv file and do the complete embbedings part with genkit <--------
+const xlsx4 = async (req, res) => {
+	try {
+		console.log("xlsx4")
+		if (req.user.type === "seller") {
+			// tracers langsmith
+			const tracedUploadFileToCloudStorage = traceable(uploadFileToCloudStorage, { 
+				name: "uploadFileToCloudStorage", 
+				run_type: "tool",
+				metadata: { sellerId: "123", environment: "production" }
+			});
+			
+			// req data
+			let sellerId = req.params.sellerId;
+			let showRoomId = req.params.showRoomId;
+			const busboy = Busboy({ headers: req.headers });
+			let mimetype = "";
+			let newFileName = "";
+			let cloudStoragePath = "";
+			let tempFilePath = "";
+
+			// data events
+			busboy.on("file", (fieldname, file, filename, encoding, mime) => {
+				if (fieldname !== "xlsxFile" && mime !== "multipart/form-data") return;
+				newFileName = `${req.params.sellerId}-${filename.filename}`;
+				tempFilePath = path.join(os.tmpdir(), newFileName);
+				cloudStoragePath = path.join(showRoomId, "docs_sellers", sellerId, newFileName);
+				mimetype = mime;
+				file.pipe(fs.createWriteStream(tempFilePath));
+			});
+
+			busboy.on("finish", async () => {
+				try {
+					await uploadFileToCloudStorage(tempFilePath, cloudStoragePath, mimetype);
+					const csvOfProductsFilepath = await convertExcelToCSV(tempFilePath);
+					const extractDataFromCSVFile = await extractDataFromCSV(csvOfProductsFilepath);
+	
+					for (const product of extractDataFromCSVFile.data) {
+						const exampleParagraph = `El ${product['productData_Make'] || 'N/A'} ${product['productData_Model'] || 'N/A'} del año ${product['Year'] || 'N/A'} ...`;
+						// parrafo activo generacion
+						const activeParagraph = await generateParagraphForProductWithLangChain(
+							product,
+							product.name || 'Producto sin nombre',
+							extractDataFromCSVFile.descriptions,
+							exampleParagraph
+						);
+			
+						product.activeParagraph = activeParagraph;
+						product.keyWords = generateListOfKeyWordsOfProduct(activeParagraph);
+					}
+			
+					const optionsDB = {
+						data: extractDataFromCSVFile.data,
+						collection: 'products',
+						extras: {
+							sellerId,
+							companyName: res.locals.companyData.name,
+							coords: res.locals.coordsData,
+							showRoomId
+						}
+					};
+		
+					await addDataToFirestore(optionsDB);
+					res.status(200).send({ message: 'Productos subidos y procesados correctamente.' });
+				} catch (error) {
+					console.error(error);
+					res.status(500).send({ error: 'Error al procesar el archivo.' });
+				}
+			});
+	
+			req.pipe(busboy);
+		} else {
+			res.status(403).send({ error: 'Permiso denegado: solo los vendedores pueden subir productos.' });
+		}
+	} catch (error) {
+		console.error(error);
+		res.status(500).send({ error: 'Error interno del servidor.' });
+	}
+};
+
+// post products with only a .csv file and do the complete embbedings part with genkit y eco lang <--------
+const xlsx5 = async (req, res) => {
+	try {
+		console.log("xlsx5");
+	
+		if (req.user.type !== "seller") {
+			return res.status(403).send({ error: 'Permiso denegado: solo los vendedores pueden subir productos.' });
+		}
+	
+		const sellerId = req.params.sellerId;
+		const showRoomId = req.params.showRoomId;
+	
+		const busboy = Busboy({ headers: req.headers });
+		let mimetype = "";
+		let newFileName = "";
+		let cloudStoragePath = "";
+		let tempFilePath = "";
+	
+		busboy.on("file", (fieldname, file, filename, encoding, mime) => {
+			if (fieldname !== "xlsxFile" && mime !== "multipart/form-data") return;
+			newFileName = `${sellerId}-${filename.filename}`;
+			tempFilePath = path.join(os.tmpdir(), newFileName);
+			cloudStoragePath = path.join(showRoomId, "docs_sellers", sellerId, newFileName);
+			mimetype = mime;
+			file.pipe(fs.createWriteStream(tempFilePath));
+		});
+	
+		busboy.on("finish", async () => {
+			try { 
+
+				// 1. Upload file to cloud storage
+				const tracedUploadFileToCloudStorage = traceable(
+					uploadFileToCloudStorage, 
+					{
+						name: "uploadFileToCloudStorage",
+						run_type: "tool",
+						extractInputs: (tempFilePath, cloudStoragePath, mimetype) => ({
+							tempFilePath,
+							cloudStoragePath,
+							mimetype,
+						}),
+						extractOutputs: (output) => output,
+						metadata: { sellerId, showRoomId },
+						tags: ['1. upload xlsx'],
+					}
+				);
+
+				// run it tracer tracedUploadFileToCloudStorage
+				const { success, path, mime, uploadedAt } = await tracedUploadFileToCloudStorage(
+					tempFilePath,
+					cloudStoragePath,
+					mimetype
+				);
+
+				// console.log({ success, path, mime, uploadedAt });
+
+				// 2. Convert to CSV
+				const tracedConvertExcelToCSV = traceable(
+					convertExcelToCSV,
+					{
+						name: "convertExcelToCSV",
+						run_type: "tool",
+						extractInputs: (tempFilePath) =>({
+							tempFilePath
+						}),
+						extractOutputs: (output) => output,
+						metadata: { sellerId, showRoomId },
+						tags: ['2. convert xlsx to csv'],
+					}
+					
+				);
+
+				// console.log({tempFilePath})
+
+				// run it tracer tracedConvertExcelToCSV
+				const { csvFilePath } = await tracedConvertExcelToCSV(
+					tempFilePath
+				)
+
+				// console.log({ csvFilePath });
+
+				// 3. Extract data from CSV
+				const tracedExtractDataFromCSV = traceable(
+					extractDataFromCSV,
+					{
+
+						name: "extractDataFromCSV",
+						run_type: "tool",
+						extractInputs: (csvFilePath) =>({
+							csvFilePath
+						}),
+						extractOutputs: (output) => output,
+						metadata: { sellerId, showRoomId },
+						tags: ['3. extract data from csv']
+					}
+				);
+
+				// run it tracer tracedExtractDataFromCSV
+				const { 
+					data,
+                    descriptions,
+                    count,
+                    keys
+				} = await tracedExtractDataFromCSV(
+					csvFilePath
+				)
+
+				// console.log({ data, descriptions, count, keys });
+
+				// parrafo ejemplo
+				const exampleParagraph = 
+					` 
+						El Ford Escape del año 2023 es un vehículo SUV disponible en color Blue, 
+						White, Black. Está equipado con un motor de 1.5 litros, que funciona con 
+						Gasoline, generando 181 caballos de fuerza y 190 Nm de torque. Este modelo 
+						puede acelerar de 0 a 60 mph en 7.1 segundos, con una velocidad máxima de 130 mph 
+						y un rendimiento de combustible de 30 millas por galón. En cuanto a la seguridad, 
+						incluye ABS, Airbags, Ford Co-Pilot360, Rear View Camera. El interior cuenta con 
+						Cloth Seats, Keyless Entry, Power Windows, ofreciendo confort y tecnología, mientras 
+						que el exterior destaca por LED Headlights, 18-inch Alloy Wheels, aportando estilo y 
+						funcionalidad. Además, incluye características de entretenimiento como 8-inch 
+						Touchscreen Display. El precio del vehículo es de $27650, y tiene una calificación 
+						promedio de los clientes de 4.6.
+					`
+
+				// 4. Generacion de parrafo activo
+				const tracedGenerateParagraphForProductWithLangChain = traceable(
+					generateParagraphForProductWithLangChain,
+					{
+						name: "generateParagraphForProductWithLangChain",
+						run_type: "llm",
+						extractInputs: (product, productName, descriptions, exampleParagraph ) =>({
+							product,
+							productName,
+							descriptions,
+							exampleParagraph
+						}),
+						extractOutputs: (output) => output,
+						metadata: { sellerId, showRoomId },
+						tags: ['4. generate active paragraph'],
+					}
+				)
+
+				// Procesamiento de cada producto
+				for (const product of data) {
+					// console.log({product})
+					// run it tracer tracedGenerateParagraphForProductWithLangChain
+					const { activeParagraph } = await tracedGenerateParagraphForProductWithLangChain(
+						product, `${product.car_make} - ${product.car_model}`, descriptions, exampleParagraph
+					)
+					// console.log({activeParagraph})
+					// extract and assign
+					product.activeParagraph = activeParagraph;
+					console.log(JSON.stringify(product.activeParagraph))
+
+					// 5. obtener keywords
+					const tracedGenerateListOfKeyWordsOfProduct = traceable(
+						generateListOfKeyWordsOfProduct,
+						{
+							name: "generateListOfKeyWordsOfProduct",
+							run_type: "tool",
+							extractInputs: (activeParagraph) =>({
+								activeParagraph
+							}),
+							extractOutputs: (output) => output,
+							metadata: { sellerId, showRoomId },
+							tags: ['5. generate list of keywords']
+						}
+					)
+
+					// run it tracer tracedGenerateListOfKeyWordsOfProduct
+					const { listOfKeyWords } = await tracedGenerateListOfKeyWordsOfProduct(
+						product.activeParagraph
+					)
+
+					product.keyWords = listOfKeyWords;
+				}
+	
+				// 6. Guardar en Firestore
+				// props for db part
+				const optionsDB = {
+					data,
+					collection: 'products',
+					extras: {
+						sellerId,
+						companyName: res.locals.companyData.name,
+						coords: res.locals.coordsData,
+						showRoomId
+					}
+				};
+
+				const tracedAddDataToFirestore = traceable(
+					addDataToFirestore,
+					{
+						name: "addDataToFirestore",
+						run_type: "tool",
+						extractInputs: (optionsDB) =>({
+							optionsDB
+						}),
+						extractOutputs: (output) => output,
+						metadata: { sellerId, showRoomId },
+						tags: ['6. firestore save data']
+					}
+				);
+
+				// run it tracer tracedAddDataToFirestore
+				const { documentIds } = await tracedAddDataToFirestore(
+					optionsDB
+				)
+				
+				console.log({documentIds})
+				// res
+				res.status(200).send({ message: 'Productos subidos y procesados correctamente.' });
+	
+			} catch (error) {
+				console.error("Error en flujo de procesamiento:", error);
+				res.status(500).send({ error: 'Error al procesar el archivo.' });
+			}
+		});
+
+		// on error
+		busboy.on('error', error => console.log('Busboy error:', error));
+
+		// wait for the processes to finish
+		await new Promise((resolve, reject) => {
+			busboy.on('file', resolve);
+			busboy.on('finish', resolve);
+			busboy.on('error', reject);
+			busboy.end(req.rawBody);
+		});
+
+		req.pipe(busboy);
+	} catch (error) {
+		console.error("Error general en ruta xlsx5", error);
+		res.status(500).send({ error: 'Error interno del servidor.' });
+	}
+};
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////// DOCS //////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////
+
 // para subir documentos .pdf a los productos de los vendedores
-exports.docs = async (req, res) => {
+const docsPdf = async (req, res) => {
 	try {
 		// params
 		const { sellerId, showRoomId, productId } = req.params;
@@ -579,3 +928,85 @@ exports.docs = async (req, res) => {
 		res.status(500).send('Unexpected error');
 	}
 }
+
+// para subir documentos .html a los productos de los vendedores, procesarlos y almacenarlos en el index
+const docsHtml = async (req, res) => {
+	const { url } = req.body;
+
+	if (!url) {
+		return res.status(400).json({ error: 'Missing URL in request body' });
+	}
+
+	try {
+		// 1. Descargar HTML
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+		const html = await response.text();
+
+		// 2. Parsear HTML
+		const $ = cheerio.load(html);
+
+		// 3. Eliminar elementos irrelevantes
+		$('nav, footer, aside, script, style, noscript').remove();
+		$('[aria-hidden="true"], [style*="display: none"]').remove();
+
+		// 4. Selectores candidatos
+		const candidates = [
+			'main',
+			'article',
+			'section',
+			'div.content',
+			'div.main',
+			'div.post',
+			'div.description',
+			'div.body',
+		];
+
+		let extractedBlocks = [];
+
+		for (const selector of candidates) {
+		const el = $(selector);
+		if (el.length > 0) {
+			const text = el.text().trim().replace(/\s+/g, ' ');
+			const wordCount = text.split(' ').length;
+			const sentenceCount = (text.match(/\./g) || []).length;
+
+			if (wordCount > 50) {
+			extractedBlocks.push({
+				selector,
+				wordCount,
+				sentenceCount,
+				text,
+			});
+			}
+		}
+		}
+
+		// 5. Ordenar por score (word count + sentence weight)
+		extractedBlocks.sort((a, b) => {
+			const aScore = a.wordCount + a.sentenceCount * 10;
+			const bScore = b.wordCount + b.sentenceCount * 10;
+			return bScore - aScore;
+		});
+
+		// 6. Enviar los 3 más representativos
+		const topBlocks = extractedBlocks.slice(0, 3);
+
+		return res.status(200).json({ blocks: topBlocks });
+	} catch (err) {
+		console.error('Error extracting HTML:', err);
+		return res.status(500).json({ error: 'Failed to extract text from URL' });
+	}
+}
+
+
+// module exports
+export {
+    xlsx,
+	xlsx2,
+	xlsx3,
+	xlsx4, 
+	xlsx5, // <----------
+	docsPdf,
+	docsHtml 
+};
