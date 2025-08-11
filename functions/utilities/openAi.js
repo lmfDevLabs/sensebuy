@@ -1,10 +1,6 @@
-const { OpenAI } = require('openai');
-
-// OpenAI credentials
-const openai = new OpenAI({
-    organization: process.env.OPENAI_ORGANIZATION,
-    apiKey: process.env.OPENAI_API_KEY,
-}); 
+// langchain
+import { ChatOpenAI } from '@langchain/openai';
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 
 // OpenAI function response
 const generateAIResponse = async (messages) => {
@@ -90,11 +86,179 @@ const classifyChatSearchIntention = async (messages) => {
     }
 };
 
+// genera "parrafo activo" para cada producto con LLM
+const generateProductDescriptionComposeWithLLM = async (itemsArray, systemMessage, exampleParagraph, attributeDictionary) => {
+    console.log({generateProductDescriptionComposeWithLLM})
+    try {
+        const model = new ChatOpenAI({
+            temperature: 0.7,
+            modelName: "gpt-3.5-turbo",
+            openAIApiKey: process.env.OPENAI_API_KEY,
+        });
+        
+        const descriptions = [];
+        
+        for (const item of itemsArray) {
+            // Construcción del cuerpo de atributos con descripciones del diccionario
+            let attributeBlock = "A continuación tienes un conjunto de atributos de un producto con su valor:\n\n";
+            for (const [key, value] of Object.entries(item)) {
+                if (value && attributeDictionary[key]) {
+                    attributeBlock += `• ${attributeDictionary[key].descripcion}: ${value}\n`;
+                }
+            }
+        
+            // Mensaje compuesto al sistema con ejemplo incluido
+            const systemFullMessage = `${systemMessage}
+                A continuación, un ejemplo del tipo de descripción que se espera producir:
+                "${exampleParagraph}"
+                Por favor, redacta una nueva descripción basada en los datos que se te proporcionarán, manteniendo un estilo similar al del ejemplo.`;
+        
+            const messages = [
+                new SystemMessage(systemFullMessage),
+                new HumanMessage(attributeBlock)
+            ];
+        
+            try {
+                const result = await model.call(messages);
+                descriptions.push({
+                    input: item,
+                    description: result.text.trim()
+                });
+            } catch (err) {
+                console.error("Error generating description for item:", item, err);
+                descriptions.push({
+                    input: item,
+                    description: "ERROR_GENERATING_DESCRIPTION"
+                });
+            }
+        }
+        
+        return descriptions;
+    } catch (error) {
+        console.error('Error generateDescriptionCompose:', error);
+        return ''; // Devuelve una cadena vacía en caso de error.
+    }
+    
+}
 
+// LLM para procesar un solo documento
+const generateParagraphForProduct = async(productData, productName, attributeDictionary, systemMessage, exampleParagraph) => {
+    
+    console.log(`Generating active paragraph for product in "generateParagraphForProduct": ${productName}`);
+    try {
+        // Inicializa el modelo dentro de la función o hazlo global si prefieres
+        // (Ten en cuenta el manejo de instancias en funciones concurrentes V2)
+        const model = new ChatOpenAI({
+            temperature: 0.7,
+            modelName: "gpt-3.5-turbo", // O gpt-4, etc.
+            openAIApiKey: openAIApiKey,
+        });
 
+         // Construcción del cuerpo de atributos (similar a tu código)
+        let attributeBlock = "A continuación tienes un conjunto de atributos de un producto con su valor:\n\n";
+        for (const [key, value] of Object.entries(productData)) {
+            // Excluir campos que no son parte de la data tabular o no son relevantes para la narrativa inicial
+            if (key !== 'product_url' && value && attributeDictionary && attributeDictionary[key]) {
+                attributeBlock += `• ${attributeDictionary[key].descripcion}: ${value}\n`;
+            } else if (key !== 'product_url' && value && typeof value === 'string') {
+                 // Opcional: incluir campos sin descripción en el diccionario, pero que tengan valor
+                attributeBlock += `• ${key}: ${value}\n`;
+            }
+        }
 
+        if (attributeBlock === "A continuación tienes un conjunto de atributos de un producto con su valor:\n\n") {
+                console.warn(`No relevant attributes found for product ${productName} to generate paragraph.`);
+            return ""; // Devuelve cadena vacía si no hay atributos relevantes
+        }
 
-module.exports = {
+        // Mensaje compuesto al sistema con ejemplo incluido
+        const systemFullMessage = `${systemMessage}
+            A continuación, un ejemplo del tipo de descripción que se espera producir:
+            "${exampleParagraph}"
+            Por favor, redacta una nueva descripción basada en los datos que se te proporcionarán, manteniendo un estilo similar al del ejemplo.`;
+
+        const messages = [
+            new SystemMessage(systemFullMessage),
+            new HumanMessage(attributeBlock)
+        ];
+
+        const result = await model.call(messages);
+        const generatedParagraph = result.text.trim();
+
+        console.log(`Paragraph generated for product ${productName}.`);
+        return generatedParagraph;
+
+    } catch (error) {
+        console.error(`Error generating paragraph for product ${productName}:`, error);
+        // Decide cómo manejar errores: podrías retornar un string de error o lanzar
+        throw new Error(`Failed to generate paragraph for ${productName}: ${error.message}`); // Lanzar error para que Firebase lo maneje (reintento, etc.)
+    }
+}
+
+// LLM para procesar un solo documento langchain y langsmith style <-------
+const generateParagraphForProductWithLangChain = async (
+    productData,
+    productName,
+    attributeDictionary,
+    exampleParagraph
+) => {
+    
+    console.log("generateParagraphForProductWithLangChain")
+
+    // Crear el modelo con el tracer
+    const model = new ChatOpenAI({
+        temperature: 0.3,
+        modelName: "gpt-3.5-turbo",
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        
+    });
+    
+
+    // mensaje de sistema
+    const systemMessage = new SystemMessage(`
+        Eres un generador de descripciones de productos. 
+        Esta vez debes hacerlo para "${productName}". 
+        Tu tarea es redactar un párrafo descriptivo, 
+        claro y fluido, basado en la lista de atributos 
+        y una posible nota del vendedor, sobre cualquier 
+        particularidad de este que el quiera mencionar. 
+        Sigue el estilo del ejemplo SIEMPRE:
+
+        "${exampleParagraph}"
+
+        Ahora recibirás los atributos de un producto. 
+        Redacta siempre una nueva descripción consistente con el ejemeplo.`.trim());
+
+    let attributeBlock = `Atributos del producto:\n\n`;
+
+    // loop over products
+    for (const [key, value] of Object.entries(productData)) {
+        if (key !== "product_url" && key !== "notes_seller" && key !== "PDF" && value) {
+            if (attributeDictionary?.[key]) {
+                attributeBlock += `• ${attributeDictionary[key].descripcion}: ${value}\n`;
+            } else {
+                attributeBlock += `• ${key}: ${value}\n`;
+            }
+        }
+    }
+
+    // check if exists notes_seller field
+    if (productData.notes_seller) {
+        attributeBlock += `\nNota del vendedor:\n"${productData.notes_seller}"\n`;
+    }
+
+    // llm call
+    const humanMessage = new HumanMessage(attributeBlock);
+    let response = await model.invoke([systemMessage, humanMessage]);
+    response = response.text.trim();
+    // console.log({response})
+    return { activeParagraph: response }
+};
+
+export {
     generateAIResponse,
     classifyChatSearchIntention,
+    generateProductDescriptionComposeWithLLM,
+    generateParagraphForProduct, 
+    generateParagraphForProductWithLangChain // <-------
 };
