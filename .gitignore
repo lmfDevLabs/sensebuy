@@ -8,6 +8,9 @@ firebase-debug.log*
 firebase-debug.*.log*
 .env
 
+# test
+test/
+
 # Firebase cache
 .firebase/
 
@@ -17,6 +20,13 @@ firebase-debug.*.log*
 # For a team working on the same Firebase project(s), it is recommended to leave
 # it commented so all members can deploy to the same project(s) in .firebaserc.
 # .firebaserc
+
+# firebase simulators
+mi_data_firestore/
+# service account
+sensebuy-e8add-firebase-adminsdk-e0lb2-1ddd888864.json
+
+# pdf-parse test file 
 
 # Runtime data
 pids
@@ -70,3 +80,5 @@ node_modules/
 .DS_Store
 .DS_Store
 .DS_Store
+
+
