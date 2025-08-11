@@ -1,4 +1,4 @@
-const algoliasearch = require('algoliasearch');
+import { algoliasearch } from 'algoliasearch';
 
 // Búsqueda en Algolia 
 const searchInAlgolia = async (searchTerms) => {
@@ -43,7 +43,6 @@ const searchInAlgolia = async (searchTerms) => {
     }
 };
 
-// module exports
-module.exports = {
+export {
     searchInAlgolia
 };
