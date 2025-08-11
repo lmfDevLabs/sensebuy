@@ -1,23 +1,23 @@
-// firebase
-const { db, admin, storage } = require('../../firebase/admin');
-const {
-    storageBucket
-} = require('../../firebase/firebaseConfig')
+import { db } from '../../firebase/admin.js';
+import firebaseConfig from '../../firebase/firebaseConfig.js';
 
 // node
-const path = require('path');
-const os = require('os');
-const fs = require('fs');
-// busboy   
-const BusBoy = require('busboy');
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+
+// busboy
+import BusBoy from 'busboy';
+
 // validate data
-const { 
+import {
     reduceSeller,
     validateCoordsData
-} = require('../../utilities/sanitizers/validation');
- 
+} from '../../utilities/sanitizers/validation.js';
+
+
 // Crea un nuevo vendedor asociado aun usuario tipo seller.
-exports.sellers = async (req, res) => { 
+const sellers = async (req, res) => { 
     try {
         // check if the user can post on sellers collection
         if(req.user.type === "seller"){
@@ -52,7 +52,7 @@ exports.sellers = async (req, res) => {
     }
 }
 
-exports.coords = async (req, res) => {
+const coords = async (req, res) => {
 
     try {
         
@@ -111,7 +111,7 @@ exports.coords = async (req, res) => {
     }
 };
     
-exports.postPic360UrlOnSellerDoc = (req, res) => {
+const postPic360UrlOnSellerDoc = (req, res) => {
     try {
         // check if the user can post on sellers collection
         if(req.user.type === "seller"){
@@ -135,32 +135,6 @@ exports.postPic360UrlOnSellerDoc = (req, res) => {
                 file.pipe(fs.createWriteStream(filepath));
             });
 
-            // busboy.on('finish', async () => {
-            //     try{
-            //         await bucket
-            //         .upload(imageToBeUploaded.filepath, {
-            //             resumable: false,
-            //             metadata: {
-            //                 metadata: {
-            //                 contentType: imageToBeUploaded.mimetype
-            //                 }
-            //             }
-            //         })  
-            //         .then(() => {
-            //             const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
-            //             return db.doc(`/sellers/${req.user.username}`).update({ pic360Url });
-            //         })
-            //         .then(() => {
-            //             return res.json({ message: 'image uploaded successfully' });
-            //         })
-            //         .catch((err) => {
-            //             console.error(err);
-            //             return res.status(500).json({ error: 'something went wrong' });
-            //         });
-            //     }catch(err){
-            //         console.error(err);
-            //     }
-            // });
             busboy.on('finish', async () => {
                 try {
                     await bucket.upload(imageToBeUploaded.filepath, {
@@ -172,7 +146,8 @@ exports.postPic360UrlOnSellerDoc = (req, res) => {
                         }
                     });
                     
-                    const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
+                    const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${imageFileName}?alt=media`;
+                    // const pic360Url = `https://firebasestorage.googleapis.com/v0/b/${storageBucket}/o/${imageFileName}?alt=media`;
                     await db.doc(`/sellers/${req.user.username}`).update({ pic360Url });
                     
                     return res.json({ message: 'image uploaded successfully' });
@@ -188,5 +163,11 @@ exports.postPic360UrlOnSellerDoc = (req, res) => {
     } catch (error) {
         console.log(error);
     }
+};
+
+export {
+    sellers,
+    coords,
+    postPic360UrlOnSellerDoc
 };
 
