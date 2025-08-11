@@ -1,13 +1,14 @@
 // node modules
-const fs = require('fs');
+import fs from 'fs';
 // firebase
-const { db, admin, storage } = require('../../firebase/admin');
+// import { db, admin, storage } from '../../firebase/admin.js';
+import { db, storage } from '../../firebase/admin.js';
 // cloud storage
-const {
-    downloadFileOfCloudStorage,
-} = require('../../utilities/cloudStorage');
+import { downloadFileOfCloudStorage } from '../../utilities/cloudStorage.js';
+
+
 // post buyer
-exports.buyers = async (req, res) => {
+const buyers = async (req, res) => {
     try {
         // check if the user can post on sellers collection
         if(req.user.type === "buyer"){
@@ -75,11 +76,16 @@ exports.buyers = async (req, res) => {
 }
 
 // get token buyer to publisb over pubsub
-exports.tokenBuyers = async (req, res) => {
+const tokenBuyers = async (req, res) => {
     let showRoomId = req.params.showRoomId
     let showRoomCsvFilePath = `${showRoomId}/sensebuy-e8add-482dddf1f0e3.json`
     const downloadTokenJsonFileOfCloudStorage = await downloadFileOfCloudStorage(showRoomCsvFilePath);
     const fileContent = fs.readFileSync(downloadTokenJsonFileOfCloudStorage, {encoding: 'utf8'});
     console.log({fileContent})
     res.send(fileContent)
+}
+
+export{
+    buyers,
+    tokenBuyers
 }
