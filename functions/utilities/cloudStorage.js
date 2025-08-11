@@ -1,15 +1,15 @@
 // node modules
-const os = require('os');
-const fs = require('fs');
-const path = require('path');
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
+
 // firebase 
-const {  
-    storage, 
-} = require('../firebase/admin');
+import { storage } from '../firebase/admin.js';
+// bucket cs
 const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
 
 // upload files to cloud storage
-exports.uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype) => {
+const uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype) => {
     try {
         console.log('uploadFileToBucket');
 
@@ -22,13 +22,23 @@ exports.uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimety
         });
 
         console.log(`Archivo subido con éxito a ${cloudStoragePath}`);
+
+        // Retorno útil
+        return {
+            success: true,
+            path: cloudStoragePath,
+            mime: mimetype,
+            uploadedAt: new Date().toISOString()
+        };
+
     } catch (error) {
         console.error('Error en uploadFileToCloudStorage:', error);
+        throw error; // Importante: relanza para que el tracer capture el fallo
     }
 };
 
 // download files from cloud storage
-exports.downloadFileOfCloudStorage = async (file) => {
+const downloadFileOfCloudStorage = async (file) => {
     try {
         console.log('downloadFileOfCloudStorage');
 
@@ -91,7 +101,12 @@ exports.downloadFileOfCloudStorage = async (file) => {
 }
 
 // delete files from cloud storage
-exports.deleteFileToCloudStorage = async () => {
-
+const deleteFileToCloudStorage = async () => {
 }
+
+export {
+    uploadFileToCloudStorage,
+    downloadFileOfCloudStorage,
+    deleteFileToCloudStorage
+};
 
