@@ -5,7 +5,7 @@ const isEmail = (email) => {
 
 const isEmpty = (string) => string.trim() === '';
 
-exports.validateSignupData = (data) => {
+const validateSignupData = (data) => {
     try {
         let errors = {};
 
@@ -30,7 +30,7 @@ exports.validateSignupData = (data) => {
 
 }
 
-exports.validateLoginData = (data) => {
+const validateLoginData = (data) => {
     try {
         let errors = {};
 
@@ -46,7 +46,7 @@ exports.validateLoginData = (data) => {
     }
 }
 
-// exports.reduceUserDetails = (data) => {
+// const reduceUserDetails = (data) => {
 //     let userDetails = {};
 
 //     if (!isEmpty(data.bio)) userDetails.bio = data.bio.trim();
@@ -59,7 +59,7 @@ exports.validateLoginData = (data) => {
 //     return userDetails;
 // };
 
-exports.reduceSeller = (data) => {
+const reduceSeller = (data) => {
     try {
         // Proporcionar un objeto vacío como valor por defecto si data es undefined
         data = data || {};
@@ -83,7 +83,7 @@ exports.reduceSeller = (data) => {
 };
 
 
-exports.validateCoordsData = (data) => {
+const validateCoordsData = (data) => {
     try {
         let coords = {};
 
@@ -94,5 +94,12 @@ exports.validateCoordsData = (data) => {
         console.log(error);
     }
 };
+
+export {
+    validateSignupData,
+    validateLoginData,
+    reduceSeller,
+    validateCoordsData
+}
 
 

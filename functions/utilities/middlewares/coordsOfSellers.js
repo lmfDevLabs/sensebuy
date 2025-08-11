@@ -1,9 +1,7 @@
 // firebase
-const { db } = require('../../firebase/admin');
-// busboy
-const Busboy = require('busboy');
+import { db } from '../../firebase/admin.js'
 
-module.exports = async (req, res, next) => {
+const coordsOfSellers = async (req, res, next) => {
     try { 
         //const data = JSON.parse(req.body); // Parsea el JSON, ya que viene como un string
         // console.log({data});
@@ -32,7 +30,10 @@ module.exports = async (req, res, next) => {
         console.error('Error while fetching seller data: ', err);
         return res.status(500).json({ error: 'Something went wrong' });
     }
-};
+}; 
+
+export default coordsOfSellers
+
 
 
 

@@ -1,13 +1,7 @@
 // utilities
-const { 
-    classifyChatSearchIntention,
-} = require('./openAi');
-const { 
-    searchInAlgolia,
-} = require('./algolia');
-const {  
-    searchInTempVectorDB,
-} = require('./embeddings');
+import { classifyChatSearchIntention } from './openAi.js';  
+import { searchInAlgolia } from './algolia.js';
+// import { searchInTempVectorDB } from './embeddings.js';
 
 // enrutador de medios de búsqueda
 // const handleUserQuery = async (sessionId, messages) => {
@@ -74,6 +68,6 @@ const handleUserQuery = async (sessionId, messages) => {
     return { intention, fullRes: fullResponse, response };
 };
 
-module.exports = {
+export {
     handleUserQuery,
 };
