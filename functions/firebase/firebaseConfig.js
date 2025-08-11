@@ -1,4 +1,4 @@
-module.exports = {
+const firebaseConfig = {
 	apiKey: "AIzaSyCYkoSDh543spedFITfMSNf2z2xfunMEt0",
 	authDomain: "sensebuy-e8add.firebaseapp.com",
 	projectId: "sensebuy-e8add",
@@ -7,3 +7,5 @@ module.exports = {
 	appId: "1:924824526379:web:863df814c044b86aa1546e",
 	measurementId: "G-HXFZGJF236"
 };
+
+export default firebaseConfig;
