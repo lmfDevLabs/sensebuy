@@ -1,73 +1,107 @@
 // node modules
-const fs = require('fs');
+import fs from 'fs';
 // csv
-const csv = require('csv-parser');
+import csv from 'csv-parser';
 
-// convert excel to csv
-exports.convertExcelToCSV = async (filepath) => {
-    try {
-        console.log('convertExcelToCSV');
-        const xlsx = require('xlsx');
 
-        // Lee el archivo Excel
-        const workbook = xlsx.readFile(filepath);
-
-        // Obtiene el nombre de la primera hoja
-        const firstSheetName = workbook.SheetNames[0];
-
-        // Convierte la hoja a formato CSV
-        const csvData = xlsx.utils.sheet_to_csv(workbook.Sheets[firstSheetName]);
-
-        // Crea el nuevo nombre del archivo, reemplazando la extensión
-        const newFilepath = filepath.replace(/\.(xls|xlsx)$/, '.csv');
-
-        // Escribe el archivo CSV
-        fs.writeFileSync(newFilepath, csvData);
-
-        return newFilepath;
-    } catch (error) {
-        console.error('Error convertExcelToCSVAndCreateNewPath:', error);
-        throw error;
-    }
-};
 // extract csv data
-exports.extractDataFromCSV = (filepath) => {
+// exports.extractDataFromCSV = (filepath) => {
+//     console.log('extractDataFromCSV');
+//     return new Promise((resolve, reject) => {
+//         const dataObject = [];
+//         fs.createReadStream(filepath)
+//             .pipe(csv())
+//             .on('data', (row) => {
+//                 let car = {};
+//                 // loop
+//                 for (const key in row) {
+//                     // to trim the values
+//                     let value = row[key].trim();
+//                     // to lower case keys and trim the values
+//                     let newKey = key.toLowerCase().trim();
+//                     // Convierte "null" a null
+//                     if (value.toLowerCase() === "null") {
+//                         car[newKey] = null;
+//                     }  
+//                     // Manejo especial para el campo "price"
+//                     else if (newKey === 'price_($)' && /^[0-9.]+$/.test(value)) {
+//                         car[newKey] = parseFloat(value);
+//                     } 
+//                     // Convierte números con puntos (decimales)
+//                     else if (/^-?\d+(\.\d+)?$/.test(value)) { 
+//                         car[newKey] = parseFloat(value);
+//                     }
+//                     // convierte a minúsculas excepto para "pdf" y "pics"
+//                     else if (newKey !== 'pdf' && newKey !== 'pics' && newKey !== 'product_url') {
+//                         car[newKey] = value.toLowerCase();
+//                     } else {
+//                         car[newKey] = value;  // Mantener el valor original para "pdf" y "pics"
+//                     }
+//                 }
+//                 dataObject.push(car);
+//             })
+//             .on('end', () => resolve(dataObject))
+//             .on('error extractDataFromCSV:', reject);
+//     });
+// };
+
+// extract csv data and caract dicc
+const extractDataFromCSV = (filepath) => {
     console.log('extractDataFromCSV');
     return new Promise((resolve, reject) => {
         const dataObject = [];
+        let isFirstRow = true;
+        let descriptions = {};
+
         fs.createReadStream(filepath)
             .pipe(csv())
             .on('data', (row) => {
+                if (isFirstRow) {
+                    // Primera fila se usa como diccionario de descripciones
+                    for (const key in row) {
+                        const newKey = key.toLowerCase().trim();
+                        const desc = row[key].trim();
+                        descriptions[newKey] = desc;
+                    }
+                    isFirstRow = false;
+                    return; // no agregamos esta fila al dataObject
+                }
+
                 let car = {};
-                // loop
                 for (const key in row) {
-                    // to trim the values
                     let value = row[key].trim();
-                    // to lower case keys and trim the values
                     let newKey = key.toLowerCase().trim();
-                    // Convierte "null" a null
+
                     if (value.toLowerCase() === "null") {
                         car[newKey] = null;
-                    }  
-                    // Manejo especial para el campo "price"
-                    else if (newKey === 'price_($)' && /^[0-9.]+$/.test(value)) {
+                    } else if (newKey === 'price_($)' && /^[0-9.]+$/.test(value)) {
                         car[newKey] = parseFloat(value);
-                    } 
-                    // Convierte números con puntos (decimales)
-                    else if (/^-?\d+(\.\d+)?$/.test(value)) { 
+                    } else if (/^-?\d+(\.\d+)?$/.test(value)) {
                         car[newKey] = parseFloat(value);
-                    }
-                    // convierte a minúsculas excepto para "pdf" y "pics"
-                    else if (newKey !== 'pdf' && newKey !== 'pics') {
+                    } else if (newKey !== 'pdf' && newKey !== 'pics' && newKey !== 'product_url') {
                         car[newKey] = value.toLowerCase();
                     } else {
-                        car[newKey] = value;  // Mantener el valor original para "pdf" y "pics"
+                        car[newKey] = value;
                     }
                 }
                 dataObject.push(car);
             })
-            .on('end', () => resolve(dataObject))
-            .on('error extractDataFromCSV:', reject);
+            .on('end', () => {
+                resolve({
+                    data: dataObject,
+                    descriptions: descriptions,
+                    count: dataObject.length,
+                    keys: Object.keys(descriptions).slice(0, 5)
+                });
+            })
+            .on('error', (error) => {
+                console.error('Error in extractDataFromCSV:', error);
+                reject(error);
+            });
     });
+};
+
+export {
+    extractDataFromCSV
 };
 
