@@ -8,11 +8,13 @@ import { splitTextWithLangChain } from '../utilities/textProcessing.js'
 
 const processHtmlDocument = onDocumentCreated(
   {
-    document: "html_docs_to_process/{docId}",
+    document: "htmlDocsToProcess/{docId}",
     region: "us-central1",
     timeoutSeconds: 60,
   },
   async (event) => {
+    
+    console.log("processHtmlDocument")
     const docData = event.data?.data();
     const { productId, product_url } = docData;
 
@@ -32,7 +34,7 @@ const processHtmlDocument = onDocumentCreated(
       }
 
       const batch = db.batch();
-      const chunksCollection = db.collection("chunks_embeddings");
+      const chunksCollection = db.collection("chunksEmbeddings");
 
       chunks.forEach((chunkText, index) => {
         const chunkRef = chunksCollection.doc();

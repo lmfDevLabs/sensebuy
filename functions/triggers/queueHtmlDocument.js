@@ -9,12 +9,13 @@ const queueHtmlDocument = onDocumentCreated(
     region: 'us-central1',
   },
   async (event) => {
+    console.log("queueHtmlDocument")
     const data = event.data?.data();
     const productId = event.params.productId;
 
     if (!data?.product_url) return;
 
-    const docRef = db.collection('html_docs_to_process').doc(productId);
+    const docRef = db.collection('htmlDocsToProcess').doc(productId);
 
     await docRef.set({
       productId,
