@@ -59,7 +59,8 @@ const extractDataFromCSV = (filepath) => {
                 if (isFirstRow) {
                     // Primera fila se usa como diccionario de descripciones
                     for (const key in row) {
-                        const newKey = key.toLowerCase().trim();
+                        //const newKey = key.toLowerCase().trim();
+                        let newKey = key.trim().toLowerCase().replace(/\s+/g, '_');
                         const desc = row[key].trim();
                         descriptions[newKey] = desc;
                     }
@@ -70,7 +71,8 @@ const extractDataFromCSV = (filepath) => {
                 let car = {};
                 for (const key in row) {
                     let value = row[key].trim();
-                    let newKey = key.toLowerCase().trim();
+                    //let newKey = key.toLowerCase().trim();
+                    const newKey = key.trim().toLowerCase().replace(/\s+/g, '_');
 
                     if (value.toLowerCase() === "null") {
                         car[newKey] = null;
