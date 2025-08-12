@@ -81,10 +81,12 @@ import ragProductQuestionFlow from './genkit/flows/ragProductQuestionFlow.js'
 // import updateShowRoomOnProductCreate from './triggers/updateShowRoomOnProductCreate.js';
 // import docsProcessingOnProductCreate from './triggers/docsProcessingOnProductCreate.js';
 // import detectTelemetryEventsForAllDevices from './triggers/detectTelemetryEventsForAllDevices.js';
+
 // flows
 import saveActiveParagraphAsChunk from './triggers/saveActiveParagraphAsChunk.js';
 import queueHtmlDocument from './triggers/queueHtmlDocument.js';
 import processHtmlDocument from './triggers/processHtmlDocument.js';
+import queuePdfDocument from './triggers/queuePdfDocument.js';
 // import extractChunksFromProductUrlsOnCreate from './triggers/extractChunksFromProductUrlsOnCreate.js';
 
 
@@ -322,6 +324,7 @@ export {
   // triggers flows
   saveActiveParagraphAsChunk,
   queueHtmlDocument,
-  processHtmlDocument
+  processHtmlDocument,
+  queuePdfDocument,
   // extractChunksFromProductUrlsOnCreate
 }
