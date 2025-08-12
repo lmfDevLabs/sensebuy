@@ -91,11 +91,33 @@ const extractTextFromPdf = async (pdfBuffer) => {
         console.error('Error extracting text from PDF:', error);
         return null;
     }
-}
+  }
 
 
 
-// html extractor
+// pdf extractor
+const extractMeaningfulTextFromPdf = async (url) => {
+  try {
+    const pdfBuffer = await downloadDocFromExternalUrl(url);
+    const fullText = await extractTextFromPdf(pdfBuffer);
+
+    if (!fullText) {
+      return { fullText: "", blocks: [] };
+    }
+
+    const blocks = fullText
+      .split(/\n{2,}/)
+      .map((block) => block.replace(/\s+/g, " ").trim())
+      .filter((text) => text.length >= 30);
+
+    return { fullText: blocks.join("\n\n"), blocks };
+  } catch (err) {
+    console.error(`[PDF Extraction] Error fetching or parsing: ${url}`, err);
+    throw err;
+  }
+};
+
+  // html extractor
 const extractMeaningfulTextFromHtml = async (url) => {
   try {
     const response = await fetch(url);
@@ -224,5 +246,6 @@ export {
   extractTextFromPdf,
   // loadHtmlDocs, // <-----------
   // loadPdfDocs // <-----------
-  extractMeaningfulTextFromHtml
+  extractMeaningfulTextFromHtml,
+  extractMeaningfulTextFromPdf
 };

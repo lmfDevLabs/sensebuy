@@ -13,13 +13,13 @@ const queuePdfDocument = onDocumentCreated(
     const data = event.data?.data();
     const productId = event.params.productId;
 
-    if (!data?.pdf_url) return; // ojo aca
+    if (!data?.pdf_url) return;
 
     const docRef = db.collection('pdfDocsToProcess').doc(productId);
 
     await docRef.set({
       productId,
-      product_url: data.product_url,
+      pdf_url: data.pdf_url,
       source_type: 'pdf',
       queuedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
