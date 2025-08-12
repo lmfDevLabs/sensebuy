@@ -5,7 +5,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 
 // global
-const CHUNKS_COLLECTION_NAME = 'chunks_embeddings';
+const CHUNKS_COLLECTION_NAME = 'chunksEmbeddings';
 
 // salva el "active paragraph" como chunk 
 const saveActiveParagraphAsChunk = onDocumentCreated(
