@@ -87,6 +87,7 @@ import saveActiveParagraphAsChunk from './triggers/saveActiveParagraphAsChunk.js
 import queueHtmlDocument from './triggers/queueHtmlDocument.js';
 import processHtmlDocument from './triggers/processHtmlDocument.js';
 import queuePdfDocument from './triggers/queuePdfDocument.js';
+import processPdfDocument from './triggers/processPdfDocument.js';
 // import extractChunksFromProductUrlsOnCreate from './triggers/extractChunksFromProductUrlsOnCreate.js';
 
 
@@ -326,5 +327,6 @@ export {
   queueHtmlDocument,
   processHtmlDocument,
   queuePdfDocument,
+  processPdfDocument,
   // extractChunksFromProductUrlsOnCreate
 }
