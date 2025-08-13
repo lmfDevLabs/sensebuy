@@ -2,6 +2,8 @@
 import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+// 🧠 Langsmith
+import { traceable } from 'langsmith/traceable';
 
 const queueHtmlDocument = onDocumentCreated(
   {
@@ -17,7 +19,19 @@ const queueHtmlDocument = onDocumentCreated(
 
     const docRef = db.collection('htmlDocsToProcess').doc(productId);
 
-    await docRef.set({
+    const tracedQueueHtmlDocument = traceable(
+      (payload) => docRef.set(payload),
+      {
+        name: 'queueHtmlDocument',
+        run_type: 'tool',
+        extractInputs: (payload) => payload,
+        extractOutputs: (output) => output,
+        metadata: { productId },
+        tags: ['queue html'],
+      }
+    );
+
+    await tracedQueueHtmlDocument({
       productId,
       product_url: data.product_url,
       source_type: 'html',
@@ -28,4 +42,4 @@ const queueHtmlDocument = onDocumentCreated(
   }
 );
 
-export default queueHtmlDocument
+export default queueHtmlDocument;

@@ -5,6 +5,8 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 // utilities
 import { extractMeaningfulTextFromPdf } from '../utilities/externalDocs.js';
 import { splitTextWithLangChain } from '../utilities/textProcessing.js';
+// 🧠 Langsmith
+import { traceable } from 'langsmith/traceable';
 
 const processPdfDocument = onDocumentCreated(
   {
@@ -19,40 +21,80 @@ const processPdfDocument = onDocumentCreated(
     const { productId, pdf_url } = docData;
 
     try {
-      const { fullText, blocks } = await extractMeaningfulTextFromPdf(pdf_url);
+      const tracedExtractMeaningfulTextFromPdf = traceable(
+        extractMeaningfulTextFromPdf,
+        {
+          name: 'extractMeaningfulTextFromPdf',
+          run_type: 'tool',
+          extractInputs: (pdf_url) => ({ pdf_url }),
+          extractOutputs: (output) => output,
+          metadata: { productId },
+          tags: ['extract pdf'],
+        }
+      );
+
+      const { fullText, blocks } = await tracedExtractMeaningfulTextFromPdf(pdf_url);
 
       if (!fullText || blocks.length === 0) {
         console.warn(`[SKIP] Sin texto útil en ${pdf_url}`);
         return;
       }
 
-      const chunks = await splitTextWithLangChain(fullText, 700, 100);
+      const tracedSplitTextWithLangChain = traceable(
+        splitTextWithLangChain,
+        {
+          name: 'splitTextWithLangChain',
+          run_type: 'tool',
+          extractInputs: (fullText, chunkSize, overlap) => ({ chunkSize, overlap }),
+          extractOutputs: (chunks) => ({ chunksCount: chunks.length }),
+          metadata: { productId },
+          tags: ['chunk pdf'],
+        }
+      );
+
+      const chunks = await tracedSplitTextWithLangChain(fullText, 700, 100);
 
       if (chunks.length === 0) {
         console.warn(`[SKIP] No se generaron chunks para ${productId}`);
         return;
       }
 
-      const batch = db.batch();
-      const chunksCollection = db.collection("chunksEmbeddings");
+      const saveChunks = async (chunks) => {
+        const batch = db.batch();
+        const chunksCollection = db.collection("chunksEmbeddings");
 
-      chunks.forEach((chunkText, index) => {
-        const chunkRef = chunksCollection.doc();
-        batch.set(chunkRef, {
-          productId,
-          pdf_url,
-          content: chunkText,
-          index,
-          embeddingStatus: 'pending',
-          sourceField: 'pdf_url',
-          sourceIdentifier: `product/${productId}/pdf_url`,
-          sourceType: 'pdf',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        chunks.forEach((chunkText, index) => {
+          const chunkRef = chunksCollection.doc();
+          batch.set(chunkRef, {
+            productId,
+            pdf_url,
+            content: chunkText,
+            index,
+            embeddingStatus: 'pending',
+            sourceField: 'pdf_url',
+            sourceIdentifier: `product/${productId}/pdf_url`,
+            sourceType: 'pdf',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         });
-      });
 
-      await batch.commit();
-      console.log(`✅ Guardados ${chunks.length} chunks para ${productId}`);
+        await batch.commit();
+        console.log(`✅ Guardados ${chunks.length} chunks para ${productId}`);
+      };
+
+      const tracedSaveChunks = traceable(
+        saveChunks,
+        {
+          name: 'saveChunks',
+          run_type: 'tool',
+          extractInputs: (chunks) => ({ chunksCount: chunks.length }),
+          extractOutputs: (output) => output,
+          metadata: { productId },
+          tags: ['save chunks'],
+        }
+      );
+
+      await tracedSaveChunks(chunks);
     } catch (err) {
       console.error(`❌ Error procesando PDF de ${productId}:`, err.message);
     }
