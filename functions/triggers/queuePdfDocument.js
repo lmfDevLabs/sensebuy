@@ -2,6 +2,8 @@
 import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+// 🧠 Langsmith
+import { traceable } from 'langsmith/traceable';
 
 const queuePdfDocument = onDocumentCreated(
   {
@@ -17,7 +19,19 @@ const queuePdfDocument = onDocumentCreated(
 
     const docRef = db.collection('pdfDocsToProcess').doc(productId);
 
-    await docRef.set({
+    const tracedQueuePdfDocument = traceable(
+      (payload) => docRef.set(payload),
+      {
+        name: 'queuePdfDocument',
+        run_type: 'tool',
+        extractInputs: (payload) => payload,
+        extractOutputs: (output) => output,
+        metadata: { productId },
+        tags: ['queue pdf'],
+      }
+    );
+
+    await tracedQueuePdfDocument({
       productId,
       pdf_url: data.pdf_url,
       source_type: 'pdf',
@@ -28,4 +42,4 @@ const queuePdfDocument = onDocumentCreated(
   }
 );
 
-export default queuePdfDocument
+export default queuePdfDocument;
