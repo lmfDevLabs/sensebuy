@@ -15,7 +15,7 @@ const queuePdfDocument = onDocumentCreated(
     const data = event.data?.data();
     const productId = event.params.productId;
 
-    if (!data?.pdf_url) return;
+    if (!data?.pdf) return;
 
     const docRef = db.collection('pdfDocsToProcess').doc(productId);
 
@@ -33,7 +33,7 @@ const queuePdfDocument = onDocumentCreated(
 
     await tracedQueuePdfDocument({
       productId,
-      pdf_url: data.pdf_url,
+      pdf_url: data.pdf,
       source_type: 'pdf',
       queuedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
