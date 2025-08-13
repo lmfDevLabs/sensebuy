@@ -3,48 +3,6 @@ import fs from 'fs';
 // csv
 import csv from 'csv-parser';
 
-
-// extract csv data
-// exports.extractDataFromCSV = (filepath) => {
-//     console.log('extractDataFromCSV');
-//     return new Promise((resolve, reject) => {
-//         const dataObject = [];
-//         fs.createReadStream(filepath)
-//             .pipe(csv())
-//             .on('data', (row) => {
-//                 let car = {};
-//                 // loop
-//                 for (const key in row) {
-//                     // to trim the values
-//                     let value = row[key].trim();
-//                     // to lower case keys and trim the values
-//                     let newKey = key.toLowerCase().trim();
-//                     // Convierte "null" a null
-//                     if (value.toLowerCase() === "null") {
-//                         car[newKey] = null;
-//                     }  
-//                     // Manejo especial para el campo "price"
-//                     else if (newKey === 'price_($)' && /^[0-9.]+$/.test(value)) {
-//                         car[newKey] = parseFloat(value);
-//                     } 
-//                     // Convierte números con puntos (decimales)
-//                     else if (/^-?\d+(\.\d+)?$/.test(value)) { 
-//                         car[newKey] = parseFloat(value);
-//                     }
-//                     // convierte a minúsculas excepto para "pdf" y "pics"
-//                     else if (newKey !== 'pdf' && newKey !== 'pics' && newKey !== 'product_url') {
-//                         car[newKey] = value.toLowerCase();
-//                     } else {
-//                         car[newKey] = value;  // Mantener el valor original para "pdf" y "pics"
-//                     }
-//                 }
-//                 dataObject.push(car);
-//             })
-//             .on('end', () => resolve(dataObject))
-//             .on('error extractDataFromCSV:', reject);
-//     });
-// };
-
 // extract csv data and caract dicc
 const extractDataFromCSV = (filepath) => {
     console.log('extractDataFromCSV');
