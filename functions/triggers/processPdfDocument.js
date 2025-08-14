@@ -71,7 +71,7 @@ const processPdfDocument = onDocumentCreated(
             content: chunkText,
             index,
             embeddingStatus: 'pending',
-            sourceField: 'pdf_url',
+            sourceField: 'pdf',
             sourceIdentifier: `product/${productId}/pdf_url`,
             sourceType: 'pdf',
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -85,12 +85,12 @@ const processPdfDocument = onDocumentCreated(
       const tracedSaveChunks = traceable(
         saveChunks,
         {
-          name: 'saveChunks',
+          name: 'savePdfChunks',
           run_type: 'tool',
           extractInputs: (chunks) => ({ chunksCount: chunks.length }),
           extractOutputs: (output) => output,
           metadata: { productId },
-          tags: ['save chunks'],
+          tags: ['save pdf chunks'],
         }
       );
 

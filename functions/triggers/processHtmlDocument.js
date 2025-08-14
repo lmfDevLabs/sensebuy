@@ -85,12 +85,12 @@ const processHtmlDocument = onDocumentCreated(
       const tracedSaveChunks = traceable(
         saveChunks,
         {
-          name: 'saveChunks',
+          name: 'saveHtmlChunks',
           run_type: 'tool',
           extractInputs: (chunks) => ({ chunksCount: chunks.length }),
           extractOutputs: (output) => output,
           metadata: { productId },
-          tags: ['save chunks'],
+          tags: ['save html chunks'],
         }
       );
 
