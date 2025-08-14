@@ -1,7 +1,9 @@
-import { db } from '../firebase/admin.js'
+import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
 // Asegúrate de importar desde 'firebase-functions/v2/firestore' para v2 triggers
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+// 🧠 Langsmith
+import { traceable } from 'langsmith/traceable';
 
 
 // global
@@ -21,9 +23,21 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       return null;
     } 
 
-    const chunksCollectionRef = db.collection(CHUNKS_COLLECTION_NAME)
+    const chunksCollectionRef = db.collection(CHUNKS_COLLECTION_NAME);
 
-    await chunksCollectionRef.add({
+    const tracedSaveActiveParagraph = traceable(
+      (payload) => chunksCollectionRef.add(payload),
+      {
+        name: 'saveActiveParagraphAsChunk',
+        run_type: 'tool',
+        extractInputs: (payload) => ({ chunkLength: payload.chunkText.length }),
+        extractOutputs: (output) => output,
+        metadata: { productId },
+        tags: ['save active paragraph chunk'],
+      }
+    );
+
+    await tracedSaveActiveParagraph({
       productId,
       chunkText: activeParagraph,
       chunkIndex: 0, // Solo un chunk
@@ -32,7 +46,7 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       sourceIdentifier: `product/${productId}/activeParagraph`,
       embedding: null, // será llenado en el segundo trigger
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      embeddingStatus: 'pending'
+      embeddingStatus: 'pending',
     });
 
     console.log(`Stored activeParagraph of product ${productId} as a chunk.`);
@@ -41,4 +55,4 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
   }
 );
 
-export default saveActiveParagraphAsChunk
+export default saveActiveParagraphAsChunk;
