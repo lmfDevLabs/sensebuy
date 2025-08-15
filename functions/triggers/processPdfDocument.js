@@ -5,6 +5,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 // utilities
 import { extractMeaningfulTextFromPdf } from '../utilities/externalDocs.js';
 import { splitTextWithLangChain } from '../utilities/textProcessing.js';
+import { computeHash } from '../utilities/hash.js';
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
 
@@ -71,6 +72,10 @@ const processPdfDocument = onDocumentCreated(
             content: chunkText,
             index,
             embeddingStatus: 'pending',
+            embeddingHash: computeHash(chunkText),
+            embeddingModel: null,
+            errorMessage: null,
+            retries: 0,
             sourceField: 'pdf',
             sourceIdentifier: `product/${productId}/pdf_url`,
             sourceType: 'pdf',

@@ -75,6 +75,7 @@ import {
 import productSuggestionFlow from './genkit/flows/productSuggestionFlow.js'
 import indexProductItemsFlow from './genkit/flows/indexProductItemsFlow.js'
 import ragProductQuestionFlow from './genkit/flows/ragProductQuestionFlow.js'
+import embedChunkFlow from './genkit/flows/embedChunkFlow.js'
 
 // TRIGGERS
 // ops
@@ -88,6 +89,9 @@ import queueHtmlDocument from './triggers/queueHtmlDocument.js';
 import processHtmlDocument from './triggers/processHtmlDocument.js';
 import queuePdfDocument from './triggers/queuePdfDocument.js';
 import processPdfDocument from './triggers/processPdfDocument.js';
+import { queueChunkEmbeddingOnCreate, queueChunkEmbeddingOnUpdate } from './triggers/queueChunkEmbeddings.js';
+import processChunkEmbedding from './triggers/processChunkEmbedding.js';
+import requeuePendingEmbeddings from './triggers/requeuePendingEmbeddings.js';
 // import extractChunksFromProductUrlsOnCreate from './triggers/extractChunksFromProductUrlsOnCreate.js';
 
 
@@ -328,5 +332,9 @@ export {
   processHtmlDocument,
   queuePdfDocument,
   processPdfDocument,
+  queueChunkEmbeddingOnCreate,
+  queueChunkEmbeddingOnUpdate,
+  processChunkEmbedding,
+  requeuePendingEmbeddings,
   // extractChunksFromProductUrlsOnCreate
 }

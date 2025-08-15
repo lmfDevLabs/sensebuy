@@ -4,6 +4,7 @@ import admin from 'firebase-admin';
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
+import { computeHash } from '../utilities/hash.js';
 
 
 // global
@@ -47,6 +48,10 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       embedding: null, // será llenado en el segundo trigger
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       embeddingStatus: 'pending',
+      embeddingHash: computeHash(activeParagraph),
+      embeddingModel: null,
+      errorMessage: null,
+      retries: 0,
     });
 
     console.log(`Stored activeParagraph of product ${productId} as a chunk.`);
