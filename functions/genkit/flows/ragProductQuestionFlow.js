@@ -1,6 +1,7 @@
 import { genkit, z } from 'genkit';
 import { devLocalRetrieverRef } from '@genkit-ai/dev-local-vectorstore';
 import { ProductItemSchema, TextProductQuestionInputSchema } from '../schemas.js';
+import { ragDataProductPrompt } from '../prompts.js'
 import { ai } from '../config.js';
 
 // flow 3 - retrieval and generate
@@ -27,7 +28,7 @@ const ragProductQuestionFlow = ai.defineFlow(
     const productData = docs.map(doc => doc.metadata);
     // const productData = docs.map(doc => doc.metadata as ProductItem);
 
-    const response = await ragDataProductPrompt1({
+    const response = await ragDataProductPrompt({
       productData,
       question: input.question,
     });
