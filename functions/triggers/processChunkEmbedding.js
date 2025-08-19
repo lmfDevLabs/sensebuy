@@ -8,10 +8,11 @@ import { traceable } from 'langsmith/traceable';
 const processChunkEmbedding = onMessagePublished(
   { topic: 'chunk-embeddings', region: 'us-central1' },
   async (event) => {
+    console.log("processChunkEmbedding")
     const { docPath, hash } = event.data.message.json;
     if (!docPath || !hash) return;
 
-    const tracedProcess = traceable(
+    const tracedProcessChucksEmbbedings = traceable(
       async ({ docPath, hash }) => {
         const docRef = db.doc(docPath);
         const snapshot = await docRef.get();
@@ -51,7 +52,7 @@ const processChunkEmbedding = onMessagePublished(
       }
     );
 
-    await tracedProcess({ docPath, hash });
+    await tracedProcessChucksEmbbedings({ docPath, hash });
   }
 );
 
