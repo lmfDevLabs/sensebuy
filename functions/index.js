@@ -59,6 +59,7 @@ import {
   chatsNlpApiForDocs,
   chatsNlpApiForComposeDescription,
 } from './handlers/chats/chats.js';
+import { sendMessage } from './handlers/chats/sendMessage.js';
 
 // whatsapp
 import {
@@ -92,6 +93,8 @@ import processPdfDocument from './triggers/processPdfDocument.js';
 import { queueChunkEmbeddingOnCreate, queueChunkEmbeddingOnUpdate } from './triggers/queueChunkEmbeddings.js';
 import processChunkEmbedding from './triggers/processChunkEmbedding.js';
 import requeuePendingEmbeddings from './triggers/requeuePendingEmbeddings.js';
+import processChatMessage from './triggers/processChatMessage.js';
+import requeueStuckChatMessages from './triggers/requeueStuckChatMessages.js';
 // import extractChunksFromProductUrlsOnCreate from './triggers/extractChunksFromProductUrlsOnCreate.js';
 
 
@@ -265,6 +268,7 @@ app.post(`/${apiVersion}/queries2`, firebaseAuth, queriesOpenAIAndAlgolia);
 // // user admin
 // // 3-POST /chats: Crea un nuevo chat para interactuar con llm.
 app.post(`/${apiVersion}/chats`, firebaseAuth, chatsOnlyLLM);
+app.post(`/${apiVersion}/chats/sendMessage`, firebaseAuth, sendMessage);
 // // 3a-POST /chats-nlp-api: Crea un nuevo chat para interactuar con api nlp.
 app.post(`/${apiVersion}/chats-nlp-api-docs`, firebaseAuth, chatsNlpApiForDocs);
 // // 3b-POST /chats-nlp-api: Crea un nuevo chat para interactuar con api nlp.
@@ -336,5 +340,7 @@ export {
   queueChunkEmbeddingOnUpdate,
   processChunkEmbedding,
   requeuePendingEmbeddings,
+  processChatMessage,
+  requeueStuckChatMessages,
   // extractChunksFromProductUrlsOnCreate
 }
