@@ -112,17 +112,7 @@ const chunkText = async (text, maxChunkSize) => {
 /////////////////////////////////////////////// LANGCHAIN ///////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 // chunking with langchain // <----------
-// const splitTextWithLangChain = async (text, chunkSize = 700, chunkOverlap = 100) => {
-//     const splitter = new RecursiveCharacterTextSplitter({
-//         chunkSize,
-//         chunkOverlap,
-//     });
-
-//     const docsChunks = await splitter.createDocuments([text])
-//     return docsChunks.map(doc => doc.pageContent);
-// };
-
-const splitTextWithLangChain = async (text, chunkSize = 700, chunkOverlap = 100) => {
+const splitTextWithLangChain = async (text, chunkSize = 2200, chunkOverlap = 220) => {
     if (!text || typeof text !== "string") {
         console.warn("⚠️ No valid text provided to splitTextWithLangChain");
         return [];
