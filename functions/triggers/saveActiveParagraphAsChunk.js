@@ -31,7 +31,7 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       {
         name: 'saveActiveParagraphAsChunk',
         run_type: 'tool',
-        extractInputs: (payload) => ({ chunkLength: payload.chunkText.length }),
+        extractInputs: (payload) => ({ chunkLength: payload.content.length }),
         extractOutputs: (output) => output,
         metadata: { productId },
         tags: ['save active paragraph chunk'],
@@ -40,9 +40,9 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
 
     await tracedSaveActiveParagraph({
       productId,
-      chunkText: activeParagraph,
+      content: activeParagraph,
       chunkIndex: 0, // Solo un chunk
-      sourceType: 'inventory',
+      sourceType: 'inventory - xlsx',
       sourceField: 'activeParagraph',
       sourceIdentifier: `product/${productId}/activeParagraph`,
       embedding: null, // será llenado en el segundo trigger
