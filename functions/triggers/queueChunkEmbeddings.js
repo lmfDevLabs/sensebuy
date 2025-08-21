@@ -9,9 +9,10 @@ const TOPIC = 'chunk-embeddings';
 const publish = (payload) =>
   pubsub.topic(TOPIC).publishMessage({ json: payload });
 
-export const queueChunkEmbeddingOnCreate = onDocumentCreated(
+const queueChunkEmbeddingOnCreate = onDocumentCreated(
   'chunksEmbeddings/{chunkId}',
   async (event) => {
+    console.log('queueChunkEmbeddingOnCreate')
     const data = event.data?.data();
     if (!data) return;
 
@@ -19,21 +20,22 @@ export const queueChunkEmbeddingOnCreate = onDocumentCreated(
     const hash = data.embeddingHash;
 
     const tracedPublish = traceable(publish, {
-      name: 'queueChunkEmbedding',
+      name: 'queueChunkEmbeddingOnCreate',
       run_type: 'tool',
       extractInputs: (payload) => payload,
       extractOutputs: () => ({}),
       metadata: { docPath },
-      tags: ['queue embedding'],
+      tags: ['queue embedding on create'],
     });
 
     await tracedPublish({ docPath, hash });
   }
 );
 
-export const queueChunkEmbeddingOnUpdate = onDocumentUpdated(
+const queueChunkEmbeddingOnUpdate = onDocumentUpdated(
   'chunksEmbeddings/{chunkId}',
   async (event) => {
+    console.log('queueChunkEmbeddingOnUpdate')
     const before = event.data?.before;
     const after = event.data?.after;
     if (!before || !after) return;
@@ -50,9 +52,15 @@ export const queueChunkEmbeddingOnUpdate = onDocumentUpdated(
       extractInputs: (payload) => payload,
       extractOutputs: () => ({}),
       metadata: { docPath },
-      tags: ['queue embedding'],
+      tags: ['queue embedding on update'],
     });
 
     await tracedPublish({ docPath, hash });
   }
 );
+
+
+export{
+  queueChunkEmbeddingOnCreate,
+  queueChunkEmbeddingOnUpdate
+}

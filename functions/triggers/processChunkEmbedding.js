@@ -48,7 +48,7 @@ const processChunkEmbedding = onMessagePublished(
         extractInputs: (payload) => payload,
         extractOutputs: () => ({}),
         metadata: { docPath },
-        tags: ['process embedding'],
+        tags: ['process chunk embedding'],
       }
     );
 
