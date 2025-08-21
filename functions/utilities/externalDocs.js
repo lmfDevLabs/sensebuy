@@ -9,11 +9,6 @@ import * as cheerio from 'cheerio';
 import pdfParse from 'pdf-parse';
 // xlsx 
 import xlsx from 'xlsx'
-// langchain
-import { Document } from 'langchain/document';
-// import { PDFLoader } from 'langchain/document_loaders/fs/pdf';
-// import { CheerioWebBaseLoader } from 'langchain/loaders/web/cheerio';
-
 
 // convert excel to csv <---------
 const convertExcelToCSV = async (filepath) => {
@@ -68,19 +63,7 @@ const downloadDocFromExternalUrl = async (url) => {
   });
 };
 
-// --- Helper Function para extraer texto de HTML (igual que antes) ---
-const extractTextFromHtml = async (html)=>{
-    try {
-        const dom = new JSDOM(html);
-        const bodyText = dom.window.document.body.textContent;
-        return bodyText ? bodyText.replace(/\s+/g, ' ').trim() : null;
-    } catch (error) {
-        console.error('Error extracting text from HTML:', error);
-        return null;
-    }
-}
-
-// --- Helper Function para extraer texto de PDF (NUEVA FUNCIÓN) ---
+// Helper Function para extraer texto de PDF (NUEVA FUNCIÓN) ---
 // Recibe el buffer de datos del archivo PDF
 const extractTextFromPdf = async (pdfBuffer) => {
     try {
@@ -91,9 +74,7 @@ const extractTextFromPdf = async (pdfBuffer) => {
         console.error('Error extracting text from PDF:', error);
         return null;
     }
-  }
-
-
+}
 
 // pdf extractor
 const extractMeaningfulTextFromPdf = async (url) => {
@@ -117,7 +98,7 @@ const extractMeaningfulTextFromPdf = async (url) => {
   }
 };
 
-  // html extractor
+// html extractor
 const extractMeaningfulTextFromHtml = async (url) => {
   try {
     const response = await fetch(url);
@@ -150,102 +131,10 @@ const extractMeaningfulTextFromHtml = async (url) => {
   }
 };
 
-
-
-
-// html document load <-----------
-// const loadHtmlDocs = async (url) => {
-//   const loader = new CheerioWebBaseLoader(url);
-//   const docs = await loader.load();
-//   return docs;
-// };
-
-// const loadHtmlDocs = async (htmlString) => {
-//   const loader = new CheerioWebBaseLoader({
-//     html: htmlString,
-//   });
-//   const docs = await loader.load();
-//   return docs.map(doc => doc.pageContent).join('\n');
-// }
-
-
-// const loadHtmlDocs = async (htmlString) => {
-//   const $ = cheerio.load(htmlString);
-
-//   // Extrae texto visible (esto puedes ajustarlo según tu caso)
-//   const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
-
-//   return [
-//     new Document({
-//       pageContent: bodyText,
-//       metadata: {
-//         source: 'cheerio-html',
-//       },
-//     }),
-//   ];
-// }
-
-// const loadHtmlDocs = async (htmlString) => {
-//   const $ = cheerio.load(htmlString);
-//   const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
-
-//   console.log("🔎 [HTML] Extracted text length:", bodyText.length);
-//   console.log("🔎 [HTML] Sample:", bodyText.slice(0, 300));
-
-//   return bodyText;
-// };
-
-
-
-// pdf document load <-----------
-// const loadPdfDocs = async (filePath) => {
-//   const loader = new PDFLoader(filePath);
-//   const docs = await loader.load();
-//   return docs;
-// };
-
-// const loadPdfDocs = async (pdfBuffer) => {
-//   // Crea un archivo temporal si estás usando un buffer
-//   const loader = new PDFLoader(new Blob([pdfBuffer]), {
-//     splitPages: false,
-//   });
-
-//   const docs = await loader.load();
-
-//   // Puedes combinar el contenido si quieres un solo string:
-//   return docs.map(doc => doc.pageContent).join('\n');
-// };
-
-// const loadPdfDocs = async (buffer) => {
-//   try {
-//     const data = await pdfParse(buffer);
-//     return data.text; // texto completo
-//   } catch (err) {
-//     console.error("Error parsing PDF:", err);
-//     return null;
-//   }
-// };
-
-// const loadPdfDocs = async (buffer) => {
-//   try {
-//     const data = await pdfParse(buffer);
-//     console.log("🔎 [PDF] Extracted text length:", data.text.length);
-//     console.log("🔎 [PDF] Sample:", data.text.slice(0, 300));
-//     return data.text;
-//   } catch (err) {
-//     console.error("❌ Error parsing PDF:", err);
-//     return null;
-//   }
-// };
-
-
 export {
-  downloadDocFromExternalUrl,
   convertExcelToCSV, // <---------
-  extractTextFromHtml,
-  extractTextFromPdf,
-  // loadHtmlDocs, // <-----------
-  // loadPdfDocs // <-----------
-  extractMeaningfulTextFromHtml,
-  extractMeaningfulTextFromPdf
+  downloadDocFromExternalUrl, 
+  extractTextFromPdf, // <-----------
+  extractMeaningfulTextFromHtml, // <-----------
+  extractMeaningfulTextFromPdf // <-----------
 };
