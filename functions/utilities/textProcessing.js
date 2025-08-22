@@ -106,27 +106,96 @@ const chunkText = async (text, maxChunkSize) => {
         }
     }
     return chunks;
-} 
+}
+
+// --------------------------------------------
+// Helpers de normalización y análisis
+// --------------------------------------------
+const normalizeWhitespace = (text) =>
+  text
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const analyzeText = (text) => {
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const lens = paragraphs.map((p) => p.length).sort((a, b) => a - b);
+  const sum = lens.reduce((a, b) => a + b, 0);
+  const avg = lens.length ? sum / lens.length : 0;
+  const median = lens.length ? lens[Math.floor(lens.length / 2)] : 0;
+  const p90 = lens.length ? lens[Math.floor(lens.length * 0.9)] : 0;
+  const p95 = lens.length ? lens[Math.floor(lens.length * 0.95)] : 0;
+
+  return {
+    charsTotal: text.length,
+    paragraphs: paragraphs.length,
+    avgParagraphLen: Math.round(avg),
+    medianParagraphLen: median,
+    p90ParagraphLen: p90,
+    p95ParagraphLen: p95,
+    sampleParagraph: paragraphs[0]?.slice(0, 250) ?? '',
+  };
+};
+
+const pickParams = (text, opts = {}) => {
+  const {
+    baseSize = 2200,
+    minSize = 1200,
+    maxSize = 3000,
+    minOverlap = 120,
+    maxOverlap = 400,
+    targetParas = 2.2,
+  } = opts;
+
+  const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const lens = paragraphs.map((p) => p.length).sort((a, b) => a - b);
+  const median = lens.length ? lens[Math.floor(lens.length / 2)] : baseSize;
+
+  let chunkSize = Math.round(
+    Math.min(maxSize, Math.max(minSize, (median || baseSize) * targetParas)),
+  );
+
+  let chunkOverlap = Math.round(chunkSize * 0.12);
+  chunkOverlap = Math.min(maxOverlap, Math.max(minOverlap, chunkOverlap));
+
+  const separators = ['\n## ', '\n### ', '\n\n', '\n', '. ', ' ', ''];
+
+  return { chunkSize, chunkOverlap, separators };
+};
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////// LANGCHAIN ///////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
-// chunking with langchain // <----------
-const splitTextWithLangChain = async (text, chunkSize = 2200, chunkOverlap = 220) => {
-    if (!text || typeof text !== "string") {
-        console.warn("⚠️ No valid text provided to splitTextWithLangChain");
-        return [];
-    }
+// chunking con LangChain basado en parámetros dinámicos
+const splitTextWithLangChain = async (text, manual = {}) => {
+  if (!text || typeof text !== 'string') {
+    console.warn('⚠️ No valid text provided to splitTextWithLangChain');
+    return [];
+  }
 
-    const splitter = new RecursiveCharacterTextSplitter({
-        chunkSize,
-        chunkOverlap,
-    });
+  const auto = pickParams(text);
+  const cfg = {
+    chunkSize: manual.chunkSize ?? auto.chunkSize,
+    chunkOverlap: manual.chunkOverlap ?? auto.chunkOverlap,
+    separators: manual.separators ?? auto.separators,
+    keepSeparator: true,
+  };
 
-    const docsChunks = await splitter.createDocuments([text]);
-    console.log(`🔎 [Chunking] Generated ${docsChunks.length} chunks`);
+  const splitter = new RecursiveCharacterTextSplitter(cfg);
+  const docs = await splitter.createDocuments([text]);
+  const chunks = docs.map((d) => normalizeWhitespace(d.pageContent));
 
-    return docsChunks.map((doc) => doc.pageContent);
+  console.log(
+    `🔎 [Chunking] ${chunks.length} chunks (size=${cfg.chunkSize}, overlap=${cfg.chunkOverlap})`,
+  );
+  return chunks;
 };
 
 export {

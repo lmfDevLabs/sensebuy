@@ -46,14 +46,14 @@ const processHtmlDocument = onDocumentCreated(
         {
           name: 'splitTextWithLangChain',
           run_type: 'tool',
-          extractInputs: (fullText, chunkSize, overlap) => ({ chunkSize, overlap }),
+          extractInputs: (fullText) => ({ chars: fullText.length }),
           extractOutputs: (chunks) => ({ chunksCount: chunks.length }),
           metadata: { productId },
           tags: ['chunk html'],
         }
       );
 
-      const chunks = await tracedSplitTextWithLangChain(fullText, 700, 100);
+      const chunks = await tracedSplitTextWithLangChain(fullText);
 
       if (chunks.length === 0) {
         console.warn(`[SKIP] No se generaron chunks para ${productId}`);
