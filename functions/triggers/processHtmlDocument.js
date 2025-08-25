@@ -6,6 +6,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { extractMeaningfulTextFromHtml } from '../utilities/externalDocs.js';
 import { splitTextWithLangChain } from '../utilities/textProcessing.js';
 import { computeHash } from '../utilities/hash.js';
+import { filterChunksByQuality } from '../utilities/chunkQuality.js';
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
 
@@ -60,31 +61,42 @@ const processHtmlDocument = onDocumentCreated(
         return;
       }
 
-      const saveChunks = async (chunks) => {
-        const batch = db.batch();
-        const chunksCollection = db.collection("chunksEmbeddings");
+      const { kept, dropped } = filterChunksByQuality(chunks, { preferLang: 'es' });
 
-        chunks.forEach((chunkText, index) => {
+      if (kept.length === 0) {
+        console.warn(`[SKIP] Todos los chunks fueron filtrados para ${productId}`);
+        return;
+      }
+
+      const saveChunks = async (qualityChunks) => {
+        const batch = db.batch();
+        const chunksCollection = db.collection('chunksEmbeddings');
+
+        qualityChunks.forEach(({ text, score, category, reasons, lang }, index) => {
           const chunkRef = chunksCollection.doc();
           batch.set(chunkRef, {
             productId,
             product_url,
-            content: chunkText,
+            content: text,
             index,
             embeddingStatus: 'pending',
-            embeddingHash: computeHash(chunkText),
+            embeddingHash: computeHash(text),
             embeddingModel: null,
             errorMessage: null,
             retries: 0,
             sourceField: 'product_url',
             sourceIdentifier: `product/${productId}/product_url`,
             sourceType: 'html',
+            qualityScore: score,
+            qualityCategory: category,
+            qualityReasons: reasons,
+            qualityLang: lang,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
         });
 
         await batch.commit();
-        console.log(`✅ Guardados ${chunks.length} chunks para ${productId}`);
+        console.log(`✅ Guardados ${qualityChunks.length} chunks para ${productId} (dropped ${dropped.length})`);
       };
 
       const tracedSaveChunks = traceable(
@@ -99,7 +111,7 @@ const processHtmlDocument = onDocumentCreated(
         }
       );
 
-      await tracedSaveChunks(chunks);
+      await tracedSaveChunks(kept);
     } catch (err) {
       console.error(`❌ Error procesando HTML de ${productId}:`, err.message);
     }

@@ -5,6 +5,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
 import { computeHash } from '../utilities/hash.js';
+import { scoreChunkQuality } from '../utilities/chunkQuality.js';
 
 
 // global
@@ -23,6 +24,16 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       console.log(`No valid activeParagraph found for product ${productId}. Skipping chunk creation.`);
       return null;
     } 
+
+    const quality = scoreChunkQuality(activeParagraph, { preferLang: 'es' });
+    const accept =
+      quality.score >= 0.55 ||
+      (quality.category === 'SPEC_TABLE' && quality.score >= 0.40);
+
+    if (!accept) {
+      console.log(`Active paragraph for product ${productId} dropped: ${quality.reasons.join('; ')}`);
+      return null;
+    }
 
     const chunksCollectionRef = db.collection(CHUNKS_COLLECTION_NAME);
 
@@ -52,6 +63,10 @@ const saveActiveParagraphAsChunk = onDocumentCreated(
       embeddingModel: null,
       errorMessage: null,
       retries: 0,
+      qualityScore: quality.score,
+      qualityCategory: quality.category,
+      qualityReasons: quality.reasons,
+      qualityLang: quality.lang,
     });
 
     console.log(`Stored activeParagraph of product ${productId} as a chunk.`);
