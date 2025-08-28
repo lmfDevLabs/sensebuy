@@ -1,6 +1,6 @@
 import { z } from 'genkit';
-import { textEmbedding004 } from '@genkit-ai/vertexai';
 import { ai } from '../config.js';
+import { embedText } from '../../utilities/vertexEmbeddingBatcher.js';
 
 const embedChunkFlow = ai.defineFlow(
   {
@@ -12,11 +12,8 @@ const embedChunkFlow = ai.defineFlow(
     }),
   },
   async (content) => {
-    const [res] = await ai.embed({
-      embedder: textEmbedding004,
-      content,
-    });
-    return { embedding: res.embedding, model: 'text-embedding-004' };
+    const embedding = await embedText(content);
+    return { embedding, model: 'text-embedding-004' };
   }
 );
 
