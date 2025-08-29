@@ -60,7 +60,7 @@ const handleUserQuery = async (sessionId, messages) => {
     if (intention === 'product_search') {
         response = await searchInAlgolia(messages[messages.length - 1].content);
     } else if (intention === 'document_search') {
-        response = await searchInVectorDB(sessionId, messages[messages.length - 1].content);
+        response = fullResponse;
     } else {
         response = "Lo siento, no pude encontrar como contestar a tu solicitud.";
     }

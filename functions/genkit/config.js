@@ -13,6 +13,11 @@ const ai = genkit({
                 embedder: textEmbedding004,
                 embedderOptions: { taskType: 'RETRIEVAL_DOCUMENT' },
             },
+            {
+                indexName: 'chunks_embeddings',
+                embedder: textEmbedding004,
+                embedderOptions: { taskType: 'RETRIEVAL_DOCUMENT' },
+            },
         ]),
     ],
 });

@@ -6,9 +6,10 @@ import {
     createChatMessage 
 } from '../../utilities/firestore.js';
 
-import { 
-    handleUserQuery 
+import {
+    handleUserQuery
 } from '../../utilities/searchRouter.js';
+import ragChunksFlow from '../../genkit/flows/ragChunksFlow.js';
 
 
 // User queries with OpenAI and Algolia
@@ -159,22 +160,26 @@ const chatsOnlyLLM = async (req, res) => {
         // console.log("Messages before handling user query:", messages);
         // Generar respuesta del asistente basado en la intención clasificada
         const { intention, fullRes, response } = await handleUserQuery(sessionId, messages);
-        // console.log("Response from handleUserQuery:", { intention, fullRes, response });
-        // Guardar la respuesta del asistente en Firebase
+        let assistantContent = response === "Lo siento, no pude encontrar como contestar a tu solicitud." ? fullRes : response;
+
+        if (intention === 'document_search') {
+            const ragResponse = await ragChunksFlow({ query: userQuery });
+            assistantContent = ragResponse.answer;
+        }
+
         const dataOtherMessage = {
-            userId, 
-            sessionId, 
-            role: 'assistant', 
-            content: response === "Lo siento, no pude encontrar como contestar a tu solicitud." ? fullRes : response,
+            userId,
+            sessionId,
+            role: 'assistant',
+            content: assistantContent,
         };
         await createChatMessage(dataOtherMessage);
-        // Añadir la respuesta del asistente al array de mensajes
-        messages.push({ 
-            role: dataOtherMessage.role, 
-            content: dataOtherMessage.content 
+
+        messages.push({
+            role: dataOtherMessage.role,
+            content: dataOtherMessage.content
         });
-        // console.log("Messages after adding assistant response:", messages);
-        // Responder con los mensajes obtenidos y la intención
+
         res.json({ sessionId, messages, intention });
 
     } catch (error) {
