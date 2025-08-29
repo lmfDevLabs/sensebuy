@@ -1,14 +1,12 @@
 // firebase
 import { db } from '../../firebase/admin.js';
 // utilities
-import { 
-    getChatMessages,
-    createChatMessage 
-} from '../../utilities/firestore.js';
-
 import {
-    handleUserQuery
-} from '../../utilities/searchRouter.js';
+    getChatMessages,
+    createChatMessage
+} from '../../utilities/firestore.js';
+import { classifyChatSearchIntention } from '../../utilities/openAi.js';
+import { searchInAlgolia } from '../../utilities/algolia.js';
 import ragChunksFlow from '../../genkit/flows/ragChunksFlow.js';
 
 
@@ -157,12 +155,13 @@ const chatsOnlyLLM = async (req, res) => {
             }); 
         }
 
-        // console.log("Messages before handling user query:", messages);
-        // Generar respuesta del asistente basado en la intención clasificada
-        const { intention, fullRes, response } = await handleUserQuery(sessionId, messages);
-        let assistantContent = response === "Lo siento, no pude encontrar como contestar a tu solicitud." ? fullRes : response;
+        // Clasificar intención del usuario y responder acorde
+        const { fullResponse, intention } = await classifyChatSearchIntention(messages);
+        let assistantContent = fullResponse;
 
-        if (intention === 'document_search') {
+        if (intention === 'product_search') {
+            assistantContent = await searchInAlgolia(userQuery);
+        } else if (intention === 'document_search') {
             const ragResponse = await ragChunksFlow({ query: userQuery });
             assistantContent = ragResponse.answer;
         }

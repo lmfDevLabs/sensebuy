@@ -1,14 +1,14 @@
 import { db } from '../../firebase/admin.js';
 import admin from 'firebase-admin';
-import { PubSub } from '@google-cloud/pubsub';
-
-const pubsub = new PubSub();
-const TOPIC = 'chat-messages';
+import { getChatMessages, createChatMessage } from '../../utilities/firestore.js';
+import { classifyChatSearchIntention } from '../../utilities/openAi.js';
+import { searchInAlgolia } from '../../utilities/algolia.js';
+import ragChunksFlow from '../../genkit/flows/ragChunksFlow.js';
 
 /**
- * HTTP endpoint to enqueue a chat message.
+ * HTTP endpoint to process a chat message and return an assistant response.
  * Expects auth middleware to populate req.user.uid.
- * Body: { userQuery: string, sessionId?: string, clientMsgId?: string }
+ * Body: { userQuery: string, sessionId?: string }
  */
 const sendMessage = async (req, res) => {
   try {
@@ -18,7 +18,7 @@ const sendMessage = async (req, res) => {
       return;
     }
 
-    const { userQuery, sessionId: providedSessionId, clientMsgId } = req.body || {};
+    const { userQuery, sessionId: providedSessionId } = req.body || {};
     if (!userQuery) {
       res.status(400).json({ error: 'userQuery required' });
       return;
@@ -26,9 +26,8 @@ const sendMessage = async (req, res) => {
 
     // Ensure session exists
     let sessionId = providedSessionId;
-    let sessionRef;
+    const sessionRef = db.collection('chats').doc(userId).collection('sessions').doc(sessionId || undefined);
     if (!sessionId) {
-      sessionRef = db.collection('chats').doc(userId).collection('sessions').doc();
       sessionId = sessionRef.id;
       await sessionRef.set({
         created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -36,36 +35,38 @@ const sendMessage = async (req, res) => {
         message_count: 0,
       });
     } else {
-      sessionRef = db.collection('chats').doc(userId).collection('sessions').doc(sessionId);
       await sessionRef.set({
         last_message_at: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     }
 
     // Store user message
-    const messageRef = await sessionRef.collection('messages').add({
-      role: 'user',
-      content: userQuery,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'received',
-      client_msg_id: clientMsgId || null,
-    });
+    await createChatMessage({ userId, sessionId, role: 'user', content: userQuery });
 
-    const payload = {
-      docPath: messageRef.path,
-      userId,
-      sessionId,
-      messageId: messageRef.id,
-      client_msg_id: clientMsgId || null,
-    };
+    // Retrieve conversation history including current message
+    const history = await getChatMessages(userId, sessionId);
+    const messages = history.map(m => ({ role: m.role, content: m.content }));
 
-    await pubsub.topic(TOPIC).publishMessage({ json: payload });
+    // Classify user intention
+    const { fullResponse, intention } = await classifyChatSearchIntention(messages);
+    let assistantContent = fullResponse;
+
+    if (intention === 'product_search') {
+      assistantContent = await searchInAlgolia(userQuery);
+    } else if (intention === 'document_search') {
+      const ragResponse = await ragChunksFlow({ query: userQuery });
+      assistantContent = ragResponse.answer;
+    }
+
+    // Store assistant message
+    await createChatMessage({ userId, sessionId, role: 'assistant', content: assistantContent });
 
     await sessionRef.set({
-      message_count: admin.firestore.FieldValue.increment(1),
+      message_count: admin.firestore.FieldValue.increment(2),
+      last_message_at: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    res.json({ sessionId, messageId: messageRef.id });
+    res.json({ sessionId, intention, answer: assistantContent });
   } catch (err) {
     console.error('sendMessage error', err);
     res.status(500).json({ error: 'Internal server error' });
