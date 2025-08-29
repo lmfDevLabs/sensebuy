@@ -45,7 +45,7 @@ async function processQueue() {
 
   while (true) {
     try {
-      const res = await ai.embed({ embedder: textEmbedding004, content: contents });
+      const res = await ai.embedMany({ embedder: textEmbedding004, content: contents });
       res.forEach((r, i) => batch[i].resolve(r.embedding));
       break;
     } catch (err) {
