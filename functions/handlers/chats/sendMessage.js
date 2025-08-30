@@ -1,18 +1,15 @@
 import { db } from '../../firebase/admin.js';
 import admin from 'firebase-admin';
-import { getChatMessages, createChatMessage } from '../../utilities/firestore.js';
-import { classifyChatSearchIntention } from '../../utilities/openAi.js';
-import { searchInAlgolia } from '../../utilities/algolia.js';
-import ragChunksFlow from '../../genkit/flows/ragChunksFlow.js';
+import { createChatMessage } from '../../utilities/firestore.js';
 import { PubSub } from '@google-cloud/pubsub';
 
 const pubsub = new PubSub();
 const TOPIC = 'chat-messages';
 
 /**
- * HTTP endpoint to process a chat message and return an assistant response.
+ * HTTP endpoint to process a chat message and enqueue further processing.
  * Expects auth middleware to populate req.user.uid.
- * Body: { userQuery: string, sessionId?: string }
+ * Body: { userQuery: string, sessionId?: string, client_msg_id?: string }
  */
 const sendMessage = async (req, res) => {
   try {
@@ -22,7 +19,7 @@ const sendMessage = async (req, res) => {
       return;
     }
 
-    const { userQuery, sessionId: providedSessionId } = req.body || {};
+    const { userQuery, sessionId: providedSessionId, client_msg_id } = req.body || {};
     if (!userQuery) {
       res.status(400).json({ error: 'userQuery required' });
       return;
@@ -44,36 +41,18 @@ const sendMessage = async (req, res) => {
       }, { merge: true });
     }
 
-    // Store user message
-    await createChatMessage({ userId, sessionId, role: 'user', content: userQuery });
-
-    // Retrieve conversation history including current message
-    const history = await getChatMessages(userId, sessionId);
-    const messages = history.map(m => ({ role: m.role, content: m.content }));
-
-    // Classify user intention
-    const { fullResponse, intention } = await classifyChatSearchIntention(messages);
-    let assistantContent = fullResponse;
-
-    if (intention === 'product_search') {
-      assistantContent = await searchInAlgolia(userQuery);
-    } else if (intention === 'document_search') {
-      const ragResponse = await ragChunksFlow({ query: userQuery });
-      assistantContent = ragResponse.answer;
-    }
-
-    // Store assistant message
-    await createChatMessage({ userId, sessionId, role: 'assistant', content: assistantContent });
+    // Store user message and obtain document path
+    const docPath = await createChatMessage({ userId, sessionId, role: 'user', content: userQuery });
 
     await sessionRef.set({
-      message_count: admin.firestore.FieldValue.increment(2),
+      message_count: admin.firestore.FieldValue.increment(1),
       last_message_at: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    const payload = { userId, sessionId, userQuery, intention, answer: assistantContent };
+    const payload = { docPath, sessionId, userId, client_msg_id };
     await pubsub.topic(TOPIC).publishMessage({ json: payload });
 
-    res.json({ sessionId, intention, answer: assistantContent });
+    res.status(202).json({ sessionId });
   } catch (err) {
     console.error('sendMessage error', err);
     res.status(500).json({ error: 'Internal server error' });
