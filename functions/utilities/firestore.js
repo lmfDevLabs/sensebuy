@@ -135,54 +135,36 @@ const saveMessageWithEmbedding = async (userId, sessionId, role, content, intent
 
 // to save chat messages
 const createChatMessage = async (data) => {
-        console.log('createChatMessage')
-        // extract 
+        console.log('createChatMessage');
+        // extract
         const {
-            userId, 
-            sessionId, 
-            role,  
-            content
-            // userQuery,
-            // // data from res
-            // intention, 
-            // response, 
-            // fullRes
-        } = data
+            userId,
+            sessionId,
+            role,
+            content,
+        } = data;
         // time
         const timestamp = new Date().toISOString();
         try {
-            const dbRef = await db
+            const dbRef = db
                 .collection('chats')
                 .doc(userId)
                 .collection('sessions')
                 .doc(sessionId)
-                .collection('messages')
-            // ask for role
-            if(role === "assistant"){
-                dbRef.add({
-                    role,
-                    timestamp,
-                    content
-                    //
-                    // intention,
-                    // response,
-                    // fullRes
-                });
-                console.log('Mensaje guardado en Firebase para assistant');
-            } else if (role === "user"){
-                dbRef.add({
-                    role,
-                    // userQuery,
-                    timestamp,
-                    content
-                });
-                console.log('Mensaje guardado en Firebase para user');
-            }
+                .collection('messages');
+
+            const docRef = await dbRef.add({
+                role,
+                timestamp,
+                content,
+            });
+            console.log(`Mensaje guardado en Firebase para ${role}`);
+            return docRef.path;
         } catch (error) {
             console.error('Error al guardar el mensaje:', error);
             throw error;
         }
-}
+};
 
 // to get chat messages
 const getChatMessages = async (userId, sessionId) => {
