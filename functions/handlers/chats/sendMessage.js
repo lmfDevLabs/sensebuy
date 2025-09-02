@@ -19,6 +19,12 @@ const sendMessage = async (req, res) => {
       return;
     }
 
+    const userType = req.user && req.user.type;
+    if (userType !== 'buyer') {
+      res.status(403).json({ error: 'Forbidden: only buyers can send messages' });
+      return;
+    }
+
     const { userQuery, sessionId: providedSessionId, client_msg_id } = req.body || {};
     if (!userQuery) {
       res.status(400).json({ error: 'userQuery required' });
