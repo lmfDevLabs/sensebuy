@@ -22,6 +22,7 @@
     "@genkit-ai/dotprompt": "^0.9.12",
     "@genkit-ai/express": "^1.15.5",
     "@genkit-ai/firebase": "^1.13.0",
+    "@genkit-ai/flow": "^0.5.17",
     "@genkit-ai/google-cloud": "^1.15.5",
     "@genkit-ai/googleai": "^1.12.0",
     "@genkit-ai/vertexai": "^1.15.5",
