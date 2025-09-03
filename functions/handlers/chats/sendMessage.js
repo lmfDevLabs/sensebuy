@@ -19,7 +19,7 @@ const sendMessage = async (req, res) => {
       return;
     }
 
-    const { userQuery, sessionId: providedSessionId, client_msg_id } = req.body || {};
+    const { userQuery, sessionId: providedSessionId, client_msg_id, search_mode } = req.body || {};
     if (!userQuery) {
       res.status(400).json({ error: 'userQuery required' });
       return;
@@ -49,10 +49,13 @@ const sendMessage = async (req, res) => {
       last_message_at: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    const payload = { docPath, sessionId, userId, client_msg_id };
+    // enrutamiento simple por parámetro
+    const allowed = new Set(['algolia', 'semantic']);
+    const mode = allowed.has((search_mode || '').toLowerCase()) ? search_mode.toLowerCase() : 'algolia';
+    const payload = { docPath, sessionId, userId, client_msg_id, search_mode: mode };
     await pubsub.topic(TOPIC).publishMessage({ json: payload });
 
-    res.status(202).json({ sessionId });
+    res.status(202).json({ sessionId, search_mode: mode });
   } catch (err) {
     console.error('sendMessage error', err);
     res.status(500).json({ error: 'Internal server error' });
