@@ -1,13 +1,9 @@
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
-import { classifyChatSearchIntention } from '../utilities/openAi.js';
-import { searchInAlgolia } from '../utilities/algolia.js';
-import ragChunksFlow from '../genkit/flows/ragChunksFlow.js';
+import routingFunnelFlow from '../genkit/flows/routingFunnelFlow.js';
 
 const LOCK_TTL_MS = 60 * 1000;
-const MESSAGE_HISTORY_LIMIT = 10;
-
 const processChatMessage = onMessagePublished('chat-messages', async (event) => {
   const payload = event.data.message.json || {};
   const { docPath, userId, sessionId, client_msg_id } = payload;
@@ -44,41 +40,33 @@ const processChatMessage = onMessagePublished('chat-messages', async (event) => 
 
     await messageRef.set({ status: 'processing' }, { merge: true });
 
-    // Retrieve last N messages
-    const snap = await sessionRef.collection('messages')
-      .orderBy('timestamp', 'desc')
-      .limit(MESSAGE_HISTORY_LIMIT)
-      .get();
-    const messages = snap.docs.reverse().map((d) => ({
-      role: d.get('role'),
-      content: d.get('content'),
-      fullRes: d.get('fullResponse') || d.get('content')
-    }));
-
-    const userQuery = messages[messages.length - 1]?.content || '';
-
-    const { fullResponse, intention } = await classifyChatSearchIntention(messages);
-    let assistantContent = fullResponse;
-    if (intention === 'product_search') {
-      assistantContent = await searchInAlgolia(userQuery);
-    } else if (intention === 'document_search') {
-      const ragResp = await ragChunksFlow({ query: userQuery });
-      assistantContent = ragResp.answer;
-    }
+    const result = await routingFunnelFlow({ userId, sessionId });
 
     const assistantRef = sessionRef.collection('messages').doc();
-    await assistantRef.set({
-      role: 'assistant',
-      content: assistantContent,
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'done'
-    });
+    if (result.outcome === 'needs_info') {
+      await assistantRef.set({
+        role: 'assistant',
+        content: result.question,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'awaiting_user'
+      });
+    } else {
+      await assistantRef.set({
+        role: 'assistant',
+        content: result.content,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'done'
+      });
+    }
 
     await messageRef.set({ status: 'done' }, { merge: true });
 
-    await sessionRef.set({
-      last_message_at: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    await sessionRef.set(
+      {
+        last_message_at: admin.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
 
   } catch (err) {
     console.error('processChatMessage error', err.message);
