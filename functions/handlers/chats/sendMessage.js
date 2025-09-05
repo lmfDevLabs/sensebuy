@@ -27,7 +27,8 @@ const sendMessage = async (req, res) => {
 
     // Ensure session exists
     let sessionId = providedSessionId;
-    const sessionRef = db.collection('chats').doc(userId).collection('sessions').doc(sessionId || undefined);
+    const sessionsRef = db.collection('chats').doc(userId).collection('sessions');
+    const sessionRef = sessionId ? sessionsRef.doc(sessionId) : sessionsRef.doc();
     if (!sessionId) {
       sessionId = sessionRef.id;
       await sessionRef.set({
