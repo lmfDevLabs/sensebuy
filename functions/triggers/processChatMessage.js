@@ -1,7 +1,6 @@
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
-import { classifyChatSearchIntention } from '../utilities/openAi.js';
 import { searchInAlgolia } from '../utilities/algolia.js';
 import ragChunksFlow from '../genkit/flows/ragChunksFlow.js';
 
@@ -10,7 +9,7 @@ const MESSAGE_HISTORY_LIMIT = 10;
 
 const processChatMessage = onMessagePublished('chat-messages', async (event) => {
   const payload = event.data.message.json || {};
-  const { docPath, userId, sessionId, client_msg_id } = payload;
+  const { docPath, userId, sessionId, client_msg_id, search_mode } = payload;
   const workerId = event.id;
 
   const sessionRef = db.collection('chats').doc(userId).collection('sessions').doc(sessionId);
@@ -57,13 +56,20 @@ const processChatMessage = onMessagePublished('chat-messages', async (event) => 
 
     const userQuery = messages[messages.length - 1]?.content || '';
 
-    const { fullResponse, intention } = await classifyChatSearchIntention(messages);
-    let assistantContent = fullResponse;
-    if (intention === 'product_search') {
+    // Enrutamiento simple por parámetro (sin funnels ni auto-clasificación)
+    const mode = (search_mode || 'algolia').toLowerCase();
+    let assistantContent = '';
+    if (mode === 'algolia') {
       assistantContent = await searchInAlgolia(userQuery);
-    } else if (intention === 'document_search') {
+      if (!assistantContent || (Array.isArray(assistantContent) && assistantContent.length === 0)) {
+        assistantContent = 'No encontré resultados con coincidencia de palabras. Prueba afinando términos o usa el modo "semantic".';
+      }
+    } else if (mode === 'semantic') {
       const ragResp = await ragChunksFlow({ query: userQuery });
-      assistantContent = ragResp.answer;
+      assistantContent = ragResp?.answer || 'No encontré contexto suficiente con búsqueda semántica.';
+    } else {
+      // fallback defensivo
+      assistantContent = 'Modo de búsqueda no reconocido. Usa "algolia" o "semantic".';
     }
 
     const assistantRef = sessionRef.collection('messages').doc();
@@ -71,7 +77,8 @@ const processChatMessage = onMessagePublished('chat-messages', async (event) => 
       role: 'assistant',
       content: assistantContent,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'done'
+      status: 'done',
+      meta: { search_mode: mode }
     });
 
     await messageRef.set({ status: 'done' }, { merge: true });
