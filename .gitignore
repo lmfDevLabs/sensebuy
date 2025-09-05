@@ -24,6 +24,7 @@ test/
 # firebase simulators
 mi_data_firestore/
 mi_data_firestore_1/
+mi_data_firestore_2/
 # service account
 sensebuy-e8add-firebase-adminsdk-e0lb2-1ddd888864.json
 
