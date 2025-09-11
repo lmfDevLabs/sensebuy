@@ -1,8 +1,8 @@
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import { db } from '../firebase/admin.js';
 import admin from 'firebase-admin';
-import { searchInAlgolia } from '../utilities/algolia.js';
 import ragChunksFlow from '../genkit/flows/ragChunksFlow.js';
+import algoliaChatFlow from '../genkit/flows/algoliaChatFlow.js';
 
 const LOCK_TTL_MS = 60 * 1000;
 const MESSAGE_HISTORY_LIMIT = 10;
@@ -60,10 +60,8 @@ const processChatMessage = onMessagePublished('chat-messages', async (event) => 
     const mode = (search_mode || 'algolia').toLowerCase();
     let assistantContent = '';
     if (mode === 'algolia') {
-      assistantContent = await searchInAlgolia(userQuery);
-      if (!assistantContent || (Array.isArray(assistantContent) && assistantContent.length === 0)) {
-        assistantContent = 'No encontré resultados con coincidencia de palabras. Prueba afinando términos o usa el modo "semantic".';
-      }
+      const { answer } = await algoliaChatFlow({ query: userQuery });
+      assistantContent = answer || 'No encontré resultados con coincidencia de palabras. Prueba afinando términos o usa el modo "semantic".';
     } else if (mode === 'semantic') {
       const ragResp = await ragChunksFlow({ query: userQuery });
       assistantContent = ragResp?.answer || 'No encontré contexto suficiente con búsqueda semántica.';
