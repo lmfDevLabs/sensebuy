@@ -4,12 +4,12 @@ const client = algoliasearch(
   process.env.ALGOLIA_APP_ID,
   process.env.ALGOLIA_ADMIN_KEY
 );
-const index = client.initIndex('products');
 
 // Devuelve los hits crudos desde Algolia
 const searchAlgoliaHits = async (searchTerms) => {
-  const response = await index.search(searchTerms, {
-    // Opciones adicionales aquí si es necesario
+  const response = await client.searchSingleIndex({
+    indexName: 'products',
+    searchParams: { query: searchTerms },
   });
   return response.hits || [];
 };
