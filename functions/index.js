@@ -4,7 +4,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import admin from 'firebase-admin';
 // genkit & vertex
-import { startFlowServer } from '@genkit-ai/express';
+// import { startFlowServer } from '@genkit-ai/express';
 
 // Fetch (Node 18+)
 const fetch = globalThis.fetch;
@@ -72,11 +72,11 @@ import {
   downloadDocFromExternalUrl
 } from './utilities/externalDocs.js';
 
-// flows
-import productSuggestionFlow from './genkit/flows/productSuggestionFlow.js'
-import indexProductItemsFlow from './genkit/flows/indexProductItemsFlow.js'
-import ragProductQuestionFlow from './genkit/flows/ragProductQuestionFlow.js'
-import embedChunkFlow from './genkit/flows/embedChunkFlow.js'
+// // flows
+// import productSuggestionFlow from './genkit/flows/productSuggestionFlow.js'
+// import indexProductItemsFlow from './genkit/flows/indexProductItemsFlow.js'
+// import ragProductQuestionFlow from './genkit/flows/ragProductQuestionFlow.js'
+// import embedChunkFlow from './genkit/flows/embedChunkFlow.js'
 
 // TRIGGERS
 // ops
@@ -298,17 +298,17 @@ const GOOGLE_AI_API_KEY_SECRET = defineSecret("GEMINI_API_KEY");
 
 
 // expose flow on https calls
-startFlowServer({
-  flows: [
-    productSuggestionFlow,
-    indexProductItemsFlow, 
-    ragProductQuestionFlow
-  ],
-  port: 8081,
-  cors: {
-      origin: '*',
-  },
-});
+// startFlowServer({
+//   flows: [
+//     productSuggestionFlow,
+//     indexProductItemsFlow, 
+//     ragProductQuestionFlow
+//   ],
+//   port: 8081,
+//   cors: {
+//       origin: '*',
+//   },
+// });
 
 
 /////////////////////////////// flows calls /////////////////////////////
