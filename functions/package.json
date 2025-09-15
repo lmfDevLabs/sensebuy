@@ -23,6 +23,7 @@
     "@genkit-ai/express": "^1.15.5",
     "@genkit-ai/firebase": "^1.13.0",
     "@genkit-ai/google-cloud": "^1.15.5",
+    "@genkit-ai/compat-oai": "^1.19.2",
     "@genkit-ai/googleai": "^1.12.0",
     "@genkit-ai/vertexai": "^1.15.5",
     "@google-cloud/firestore": "^7.11.0",

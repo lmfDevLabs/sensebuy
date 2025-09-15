@@ -1,6 +1,6 @@
 import { z } from 'genkit';
 import { ai } from '../config.js';
-import { embedText } from '../../utilities/vertexEmbeddingBatcher.js';
+import { embedText } from '../../utilities/openAiEmbeddingBatcher.js';
 
 const embedChunkFlow = ai.defineFlow(
   {
@@ -13,7 +13,7 @@ const embedChunkFlow = ai.defineFlow(
   },
   async (content) => {
     const embedding = await embedText(content);
-    return { embedding, model: 'text-embedding-004' };
+    return { embedding, model: 'text-embedding-3-small' };
   }
 );
 

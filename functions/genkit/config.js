@@ -1,5 +1,5 @@
 import { genkit } from 'genkit';
-import { vertexAI, gemini20Flash001, textEmbedding004 } from '@genkit-ai/vertexai';
+import { openAI } from '@genkit-ai/compat-oai/openai';
 import { devLocalVectorstore } from '@genkit-ai/dev-local-vectorstore';
 import { enableGoogleCloudTelemetry } from '@genkit-ai/google-cloud';
 import { logger } from 'genkit/logging';
@@ -19,17 +19,15 @@ export const ai = genkit({
   // 👇 apaga el Reflection Server aquí
   reflection: reflectionEnabled, // ← pon 'false' si quieres matar cualquier duda
   plugins: [
-    vertexAI({ location: 'us-central1' }),
+    openAI(),
     devLocalVectorstore([
       {
         indexName: 'product-items',
-        embedder: textEmbedding004,
-        embedderOptions: { taskType: 'RETRIEVAL_DOCUMENT' },
+        embedder: openAI.embedder('text-embedding-3-small'),
       },
       {
         indexName: 'chunks_embeddings',
-        embedder: textEmbedding004,
-        embedderOptions: { taskType: 'RETRIEVAL_DOCUMENT' },
+        embedder: openAI.embedder('text-embedding-3-small'),
       },
     ]),
   ],
