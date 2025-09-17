@@ -1,11 +1,7 @@
 // Firebase Functions
-import { onRequest, onCallGenkit } from "firebase-functions/v2/https";
+import { onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { defineSecret } from "firebase-functions/params";
 import admin from 'firebase-admin';
-// genkit & vertex
-// import { startFlowServer } from '@genkit-ai/express';
-
 // Fetch (Node 18+)
 const fetch = globalThis.fetch;
 
@@ -72,12 +68,6 @@ import {
   downloadDocFromExternalUrl
 } from './utilities/externalDocs.js';
 
-// // flows
-// import productSuggestionFlow from './genkit/flows/productSuggestionFlow.js'
-// import indexProductItemsFlow from './genkit/flows/indexProductItemsFlow.js'
-// import ragProductQuestionFlow from './genkit/flows/ragProductQuestionFlow.js'
-// import embedChunkFlow from './genkit/flows/embedChunkFlow.js'
-
 // TRIGGERS
 // ops
 // import updateShowRoomOnProductCreate from './triggers/updateShowRoomOnProductCreate.js';
@@ -92,6 +82,7 @@ import queuePdfDocument from './triggers/queuePdfDocument.js';
 import processPdfDocument from './triggers/processPdfDocument.js';
 import { queueChunkEmbeddingOnCreate, queueChunkEmbeddingOnUpdate } from './triggers/queueChunkEmbeddings.js';
 import processChunkEmbedding from './triggers/processChunkEmbedding.js';
+import processChunkIndexing from './triggers/processChunkIndexing.js';
 import requeuePendingEmbeddings from './triggers/requeuePendingEmbeddings.js';
 import processChatMessage from './triggers/processChatMessage.js';
 import requeueStuckChatMessages from './triggers/requeueStuckChatMessages.js';
@@ -205,9 +196,9 @@ app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx`, f
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx2`, firebaseAuth, coordsOfSellers, xlsx2);
 // 9-POST /products/xls3: Para agregar productos a través de un archivo xlsx and embbeding complete cycle.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, firebaseAuth, coordsOfSellers, xlsx3);
-// 10-POST /products/xls4: Para agregar productos a través de un archivo xlsx and embbeding with genkit cycle.
+// 10-POST /products/xls4: Para agregar productos a través de un archivo xlsx con pipeline de embeddings.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx4`, firebaseAuth, coordsOfSellers, xlsx4);
-// 11-POST /products/xls5: Para agregar productos a través de un archivo xlsx and embbeding with genkit cycle ans langsmith tracers.
+// 11-POST /products/xls5: Para agregar productos a través de un archivo xlsx y embeddings con trazabilidad LangSmith.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx5`, firebaseAuth, coordsOfSellers, xlsx5);
 // 12-POST /products/:productId/docs: Para agregar documentos a un producto.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/product/:productId/docsPdf`, docsPdf);
@@ -288,39 +279,6 @@ app.post(`/${apiVersion}/webhook`,postWhats)
 // export functions
 const api = onRequest(app);
 
-////////////////////////////////////////////////////////////////////////
-////////////////////////// GENKIT ////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Define una referencia al secreto en Secret Manager
-// const myApiKey = defineSecret(process.env.GOOGLE_AI_API_KEY);
-const GOOGLE_AI_API_KEY_SECRET = defineSecret("GEMINI_API_KEY");
-
-
-// expose flow on https calls
-// startFlowServer({
-//   flows: [
-//     productSuggestionFlow,
-//     indexProductItemsFlow, 
-//     ragProductQuestionFlow
-//   ],
-//   port: 8081,
-//   cors: {
-//       origin: '*',
-//   },
-// });
-
-
-/////////////////////////////// flows calls /////////////////////////////
-// const callProductSuggestionFlow = onCallGenkit(
-//   {
-//     secrets: [GOOGLE_AI_API_KEY_SECRET],
-//     timeoutSeconds: 60,
-//   },
-//   productSuggestionFlow
-// );
-
-
 export {
   api,
 
@@ -339,6 +297,7 @@ export {
   queueChunkEmbeddingOnCreate,
   queueChunkEmbeddingOnUpdate,
   processChunkEmbedding,
+  processChunkIndexing,
   requeuePendingEmbeddings,
   processChatMessage,
   requeueStuckChatMessages,

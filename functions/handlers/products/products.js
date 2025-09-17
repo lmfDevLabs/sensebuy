@@ -500,7 +500,7 @@ const xlsx3 = async (req, res) => {
 	}
 };
 
-// post products with only a .csv file and do the complete embbedings part with genkit <--------
+// post products with only a .csv file and do the complete embeddings part with LangChain <--------
 const xlsx4 = async (req, res) => {
 	try {
 		console.log("xlsx4")
@@ -580,7 +580,7 @@ const xlsx4 = async (req, res) => {
 	}
 };
 
-// post products with only a .csv file and do the complete embbedings part with genkit y eco lang <--------
+// post products with only a .csv file and do the complete embeddings part with LangChain y eco lang <--------
 const xlsx5 = async (req, res) => {
 	try {
 		console.log("xlsx5");
