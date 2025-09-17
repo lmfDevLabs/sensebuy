@@ -1,10 +1,16 @@
 import { onMessagePublished } from 'firebase-functions/v2/pubsub';
 import admin from 'firebase-admin';
 import { db } from '../firebase/admin.js';
-import embedChunkFlow from '../genkit/flows/embedChunkFlow.js';
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
+import { setupLangSmith } from '../ai/langchain/tracing.js';
+import { makeEmbedder } from '../ai/langchain/embeddings.js';
 import { scoreChunkQuality } from '../utilities/chunkQuality.js';
+
+setupLangSmith();
+
+const embedder = makeEmbedder();
+const embedderModel = embedder.model || embedder.modelName || 'unknown-model';
 
 const processChunkEmbedding = onMessagePublished(
   { topic: 'chunk-embeddings', region: 'us-central1' },
@@ -50,11 +56,11 @@ const processChunkEmbedding = onMessagePublished(
             return;
           }
 
-          const { embedding, model } = await embedChunkFlow(data.content);
+          const embedding = await embedder.embedQuery(data.content);
           await docRef.update({
             embedding,
             embeddingStatus: 'done',
-            embeddingModel: model,
+            embeddingModel: embedderModel,
             errorMessage: null,
             qualityScore: quality.score,
             qualityCategory: quality.category,

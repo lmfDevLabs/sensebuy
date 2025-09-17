@@ -7,7 +7,7 @@ import {
 } from '../../utilities/firestore.js';
 import { classifyChatSearchIntention } from '../../utilities/openAi.js';
 import { searchInAlgolia } from '../../utilities/algolia.js';
-import ragChunksFlow from '../../genkit/flows/ragChunksFlow.js';
+import { runSemanticRag } from '../../ai/langchain/ragService.js';
 
 
 // User queries with OpenAI and Algolia
@@ -162,7 +162,7 @@ const chatsOnlyLLM = async (req, res) => {
         if (intention === 'product_search') {
             assistantContent = await searchInAlgolia(userQuery);
         } else if (intention === 'document_search') {
-            const ragResponse = await ragChunksFlow({ query: userQuery });
+            const ragResponse = await runSemanticRag(userQuery);
             assistantContent = ragResponse.answer;
         }
 
