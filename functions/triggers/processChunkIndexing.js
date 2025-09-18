@@ -72,10 +72,11 @@ const processChunkIndexing = onDocumentUpdated('chunksEmbeddings/{chunkId}', asy
     await tracedIndex({ chunkId: event.params.chunkId });
   } catch (err) {
     console.error('[processChunkIndexing] error', err);
+    const errorText = err?.message ?? (typeof err === 'string' ? err : JSON.stringify(err));
     await afterSnap.ref.set(
       {
         vectorIndexStatus: 'error',
-        vectorIndexError: err.message,
+        vectorIndexError: errorText,
       },
       { merge: true },
     );
