@@ -62,11 +62,26 @@ const processChunkEmbedding = onMessagePublished(
             qualityLang: quality.lang,
           });
         } catch (err) {
-          await docRef.update({
-            embeddingStatus: 'error',
-            errorMessage: err.message,
-            retries: admin.firestore.FieldValue.increment(1),
-          });
+          const errorText =
+            err?.message ?? (typeof err === 'string' ? err : JSON.stringify(err));
+          try {
+            await docRef.update({
+              embeddingStatus: 'error',
+              errorMessage: errorText,
+              retries: admin.firestore.FieldValue.increment(1),
+            });
+          } catch (updateErr) {
+            const updateErrorText =
+              updateErr?.message ??
+              (typeof updateErr === 'string'
+                ? updateErr
+                : JSON.stringify(updateErr));
+            console.error('Failed to update error status for document', {
+              docPath,
+              originalError: errorText,
+              updateError: updateErrorText,
+            });
+          }
         }
       },
       {
