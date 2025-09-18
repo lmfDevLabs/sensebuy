@@ -35,6 +35,7 @@ import {
   docsPdf,
   docsHtml,
 } from './handlers/products/products.js';
+import { postProductManual } from './handlers/products/postProductManual.js';
 
 // buyers 
 import {
@@ -200,6 +201,8 @@ app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx3`, 
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx4`, firebaseAuth, coordsOfSellers, xlsx4);
 // 11-POST /products/xls5: Para agregar productos a través de un archivo xlsx y embeddings con trazabilidad LangSmith.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/products/xlsx5`, firebaseAuth, coordsOfSellers, xlsx5);
+// 11b-POST /products/manual: Para agregar un producto individual mediante JSON reutilizando el pipeline de xlsx5.
+app.post(`/${apiVersion}/sellers/:sellerId/showrooms/:showRoomId/products/manual`, firebaseAuth, coordsOfSellers, postProductManual);
 // 12-POST /products/:productId/docs: Para agregar documentos a un producto.
 app.post(`/${apiVersion}/showroom/:showRoomId/seller/:sellerId/product/:productId/docsPdf`, docsPdf);
 // 13-Test /testUrlPdf Para probar la creacion de los embeddings de un pdf
