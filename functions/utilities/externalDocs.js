@@ -69,7 +69,17 @@ const extractTextFromPdf = async (pdfBuffer) => {
     try {
         const data = await pdfParse(pdfBuffer);
         // data.text contiene el texto extraído de todas las páginas
-        return data.text ? data.text.replace(/\s+/g, ' ').trim() : null;
+        if (!data.text) {
+            return null;
+        }
+
+        const cleanedText = data.text.replace(/\s+/g, ' ').trim();
+
+        if (cleanedText.length === 0) {
+            return null;
+        }
+
+        return cleanedText;
     } catch (error) {
         console.error('Error extracting text from PDF:', error);
         return null;

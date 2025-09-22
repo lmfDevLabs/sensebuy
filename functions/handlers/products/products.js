@@ -5,7 +5,6 @@ import os from 'os';
 
 // 🧪 External libraries
 import Busboy from 'busboy';
-import pdfParse from 'pdf-parse';
 
 // 🧠 Langsmith
 import { traceable } from 'langsmith/traceable';
@@ -42,8 +41,9 @@ import {
 } from '../../utilities/embeddings.js';
 
 // External Docs
-import { 
-	convertExcelToCSV,  
+import {
+        convertExcelToCSV,
+        extractTextFromPdf,
 } from '../../utilities/externalDocs.js';
 
 // LLM
@@ -895,8 +895,10 @@ const docsPdf = async (req, res) => {
 		});
 		// Leer y procesar el PDF
 		const pdfBuffer = fs.readFileSync(filePath);
-		const pdfData = await pdfParse(pdfBuffer);
-		const pdfText = pdfData.text;
+                const pdfText = await extractTextFromPdf(pdfBuffer);
+                if (!pdfText) {
+                        throw new Error('No se pudo extraer texto del PDF proporcionado.');
+                }
 		// Generar embeddings desde OpenAI
 		const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
 		// Ruta para guardar el archivo JSON
