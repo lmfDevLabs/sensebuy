@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 // cheerio (default export en ESM)
 import * as cheerio from 'cheerio';
 // pdf
-import pdfParse from 'pdf-parse';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 // xlsx 
 import xlsx from 'xlsx'
 
@@ -66,15 +66,34 @@ const downloadDocFromExternalUrl = async (url) => {
 // Helper Function para extraer texto de PDF (NUEVA FUNCIÓN) ---
 // Recibe el buffer de datos del archivo PDF
 const extractTextFromPdf = async (pdfBuffer) => {
-    try {
-        const data = await pdfParse(pdfBuffer);
-        // data.text contiene el texto extraído de todas las páginas
-        return data.text ? data.text.replace(/\s+/g, ' ').trim() : null;
-    } catch (error) {
-        console.error('Error extracting text from PDF:', error);
-        return null;
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: pdfBuffer,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    const parts = [];
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent({ includeMarkedContent: true });
+      const text = content.items
+        .map((it) => (typeof it.str === 'string' ? it.str : ''))
+        .filter(Boolean)
+        .join(' ');
+      parts.push(text);
     }
-}
+    await pdf.cleanup();
+
+    const joined = parts.join('\n').replace(/[ \t]+\n/g, '\n').trim();
+    return joined;
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    return null;
+  }
+};
 
 // pdf extractor
 const extractMeaningfulTextFromPdf = async (url) => {
