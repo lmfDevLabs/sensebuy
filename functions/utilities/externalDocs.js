@@ -7,8 +7,11 @@ import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 // pdf
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-// xlsx 
+// xlsx
 import xlsx from 'xlsx'
+
+// storage helpers
+import { downloadFileBufferFromFirebaseUrl } from './cloudStorage.js';
 
 // convert excel to csv <---------
 const convertExcelToCSV = async (filepath) => {
@@ -40,26 +43,41 @@ const convertExcelToCSV = async (filepath) => {
 // para descargar y procesar docs desde urls
 const downloadDocFromExternalUrl = async (url) => {
   console.log("downloadDocFromExternalUrl");
+
+  const { buffer: firebaseBuffer, attempted: firebaseAttempted, error: firebaseError } = await downloadFileBufferFromFirebaseUrl(url);
+  if (firebaseBuffer) {
+    return firebaseBuffer;
+  }
+
+  if (firebaseAttempted) {
+    console.warn(
+      `[PDF Extraction] Firebase Storage download failed, falling back to HTTPS: ${url}`,
+      firebaseError,
+    );
+  }
+
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Request Failed. Status Code: ${response.statusCode}`));
-        response.resume(); // Consume response data to free up memory
-        return;
-      }
+    https
+      .get(url, (response) => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Request Failed. Status Code: ${response.statusCode}`));
+          response.resume(); // Consume response data to free up memory
+          return;
+        }
 
-      const contentType = response.headers['content-type'];
-      if (contentType !== 'application/pdf') {
-        reject(new Error(`Invalid content-type. Expected application/pdf but received ${contentType}`));
-        response.resume(); // Consume response data to free up memory
-        return;
-      }
+        const contentType = response.headers['content-type'];
+        if (!contentType || !contentType.startsWith('application/pdf')) {
+          reject(new Error(`Invalid content-type. Expected application/pdf but received ${contentType}`));
+          response.resume(); // Consume response data to free up memory
+          return;
+        }
 
-      const data = [];
-      response.on('data', (chunk) => data.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(data)));
-      response.on('error', reject);
-    }).on('error', reject); // Catch errors from https.get
+        const data = [];
+        response.on('data', (chunk) => data.push(chunk));
+        response.on('end', () => resolve(Buffer.concat(data)));
+        response.on('error', reject);
+      })
+      .on('error', reject); // Catch errors from https.get
   });
 };
 

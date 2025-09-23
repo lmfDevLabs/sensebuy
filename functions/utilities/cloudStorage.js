@@ -3,10 +3,53 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 
-// firebase 
+// firebase
 import { storage } from '../firebase/admin.js';
+
 // bucket cs
 const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
+
+const parseFirebaseStorageUrl = (rawUrl) => {
+    try {
+        const parsedUrl = new URL(rawUrl);
+
+        if (parsedUrl.hostname !== 'firebasestorage.googleapis.com') {
+            return null;
+        }
+
+        const match = parsedUrl.pathname.match(/\/v0\/b\/([^/]+)\/o\/(.+)/);
+        if (!match) {
+            return null;
+        }
+
+        const [, bucketName, encodedPath] = match;
+        const filePath = decodeURIComponent(encodedPath);
+
+        if (!bucketName || !filePath) {
+            return null;
+        }
+
+        return { bucketName, filePath };
+    } catch (error) {
+        return null;
+    }
+};
+
+const downloadFileBufferFromFirebaseUrl = async (rawUrl) => {
+    const firebaseResource = parseFirebaseStorageUrl(rawUrl);
+    if (!firebaseResource) {
+        return { buffer: null, attempted: false };
+    }
+
+    try {
+        const bucketRef = storage.bucket(firebaseResource.bucketName);
+        const fileRef = bucketRef.file(firebaseResource.filePath);
+        const [contents] = await fileRef.download();
+        return { buffer: contents, attempted: true };
+    } catch (error) {
+        return { buffer: null, attempted: true, error };
+    }
+};
 
 // upload files to cloud storage
 const uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype) => {
@@ -107,6 +150,7 @@ const deleteFileToCloudStorage = async () => {
 export {
     uploadFileToCloudStorage,
     downloadFileOfCloudStorage,
-    deleteFileToCloudStorage
+    deleteFileToCloudStorage,
+    downloadFileBufferFromFirebaseUrl
 };
 
