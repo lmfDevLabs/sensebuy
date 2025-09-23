@@ -1,5 +1,4 @@
 // node modules
-import https from 'https';
 import fs from 'fs';
 // node-fetch (solo compatible con ESM)
 import fetch from 'node-fetch';
@@ -7,8 +6,11 @@ import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 // pdf
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-// xlsx 
+// xlsx
 import xlsx from 'xlsx'
+
+// storage helpers
+import { downloadFileBufferFromFirebaseUrl, isFirebaseStorageUrl } from './cloudStorage.js';
 
 // convert excel to csv <---------
 const convertExcelToCSV = async (filepath) => {
@@ -38,29 +40,110 @@ const convertExcelToCSV = async (filepath) => {
 };
 
 // para descargar y procesar docs desde urls
-const downloadDocFromExternalUrl = async (url) => {
-  console.log("downloadDocFromExternalUrl");
-  return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Request Failed. Status Code: ${response.statusCode}`));
-        response.resume(); // Consume response data to free up memory
-        return;
-      }
+const DEFAULT_PDF_DOWNLOAD_TIMEOUT_MS = 20000;
 
-      const contentType = response.headers['content-type'];
-      if (contentType !== 'application/pdf') {
-        reject(new Error(`Invalid content-type. Expected application/pdf but received ${contentType}`));
-        response.resume(); // Consume response data to free up memory
-        return;
-      }
+const sanitizeUrlForLogs = (urlObj) => {
+  const clone = new URL(urlObj.toString());
+  if (clone.searchParams.has('token')) {
+    clone.searchParams.set('token', '[redacted]');
+  }
+  return clone.toString();
+};
 
-      const data = [];
-      response.on('data', (chunk) => data.push(chunk));
-      response.on('end', () => resolve(Buffer.concat(data)));
-      response.on('error', reject);
-    }).on('error', reject); // Catch errors from https.get
-  });
+const createPdfNetworkError = (error, sanitizedUrl, timeoutMs) => {
+  if (error.name === 'AbortError') {
+    const abortError = new Error(`[PDF Download] Request to ${sanitizedUrl} timed out after ${timeoutMs}ms.`);
+    abortError.code = 'ETIMEDOUT';
+    abortError.cause = error;
+    return abortError;
+  }
+
+  if (error.code === 'ECONNREFUSED') {
+    const connError = new Error(`[PDF Download] Connection refused while requesting ${sanitizedUrl}. Verify the host and port are reachable.`);
+    connError.code = 'ECONNREFUSED';
+    connError.cause = error;
+    return connError;
+  }
+
+  if (error.code === 'ETIMEDOUT') {
+    const socketTimeoutError = new Error(`[PDF Download] Network timeout while fetching ${sanitizedUrl}.`);
+    socketTimeoutError.code = 'ETIMEDOUT';
+    socketTimeoutError.cause = error;
+    return socketTimeoutError;
+  }
+
+  const genericError = new Error(`[PDF Download] Network error while fetching ${sanitizedUrl}: ${error.message}`);
+  if (error.code) {
+    genericError.code = error.code;
+  }
+  genericError.cause = error;
+  return genericError;
+};
+
+const ensurePdfContentType = (contentType, sanitizedUrl, sourceLabel) => {
+  const normalizedContentType = (contentType || '').toLowerCase();
+  if (!normalizedContentType.includes('application/pdf')) {
+    const error = new Error(`[${sourceLabel}] Invalid content-type for ${sanitizedUrl}. Expected application/pdf but received ${contentType || 'unknown'}.`);
+    error.code = 'UNEXPECTED_CONTENT_TYPE';
+    console.error(error.message);
+    throw error;
+  }
+};
+
+const downloadDocFromExternalUrl = async (url, options = {}) => {
+  const { timeoutMs = DEFAULT_PDF_DOWNLOAD_TIMEOUT_MS } = options;
+
+  if (!url || typeof url !== 'string') {
+    throw new Error('A valid URL must be provided to download a document.');
+  }
+
+  const trimmedUrl = url.trim();
+
+  if (isFirebaseStorageUrl(trimmedUrl)) {
+    const { buffer, contentType, sanitizedUrl } = await downloadFileBufferFromFirebaseUrl(trimmedUrl, { timeoutMs });
+    ensurePdfContentType(contentType, sanitizedUrl, 'Firebase Storage');
+    return buffer;
+  }
+
+  let urlObj;
+  try {
+    urlObj = new URL(trimmedUrl);
+  } catch (error) {
+    throw new Error(`Invalid URL provided: ${url}`);
+  }
+
+  const sanitizedUrl = sanitizeUrlForLogs(urlObj);
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+
+  try {
+    response = await fetch(urlObj.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const networkError = createPdfNetworkError(error, sanitizedUrl, timeoutMs);
+    console.error(networkError.message);
+    throw networkError;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+
+  if (!response.ok) {
+    const httpError = new Error(`[PDF Download] HTTP ${response.status} ${response.statusText} while fetching ${sanitizedUrl}.`);
+    httpError.status = response.status;
+    httpError.code = `HTTP_${response.status}`;
+    console.error(httpError.message);
+    throw httpError;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  ensurePdfContentType(contentType, sanitizedUrl, 'PDF Download');
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 };
 
 // Recibe el buffer de datos del archivo PDF
