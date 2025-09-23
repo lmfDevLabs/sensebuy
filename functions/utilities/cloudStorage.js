@@ -2,6 +2,8 @@
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import http from 'http';
+import https from 'https';
 
 // firebase 
 import { storage } from '../firebase/admin.js';
@@ -35,6 +37,53 @@ const uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype
         console.error('Error en uploadFileToCloudStorage:', error);
         throw error; // Importante: relanza para que el tracer capture el fallo
     }
+};
+
+const downloadFileBufferFromFirebaseUrl = async (firebaseUrl) => {
+    if (!firebaseUrl) {
+        throw new Error('downloadFileBufferFromFirebaseUrl: Missing firebaseUrl');
+    }
+
+    const requestUrl = new URL(firebaseUrl);
+    const client = requestUrl.protocol === 'https:' ? https : http;
+
+    const emulatorHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+    const emulatorHostEnv = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+
+    if (emulatorHostEnv) {
+        const [host] = emulatorHostEnv.split(':');
+        if (host) {
+            emulatorHosts.add(host);
+        }
+    }
+
+    const useEmulator = requestUrl.protocol === 'http:' && emulatorHosts.has(requestUrl.hostname);
+    const requestOptions = useEmulator ? { headers: { Authorization: 'Bearer owner' } } : undefined;
+
+    return new Promise((resolve, reject) => {
+        const handleResponse = (response) => {
+            const { statusCode = 0 } = response;
+
+            if (statusCode >= 400) {
+                reject(new Error(`Failed to download file: HTTP ${statusCode}`));
+                response.resume();
+                return;
+            }
+
+            const data = [];
+            response.on('data', (chunk) => data.push(chunk));
+            response.on('end', () => resolve(Buffer.concat(data)));
+        };
+
+        let request;
+        if (requestOptions) {
+            request = client.get(requestUrl, requestOptions, handleResponse);
+        } else {
+            request = client.get(requestUrl, handleResponse);
+        }
+
+        request.on('error', reject);
+    });
 };
 
 // download files from cloud storage
@@ -106,6 +155,7 @@ const deleteFileToCloudStorage = async () => {
 
 export {
     uploadFileToCloudStorage,
+    downloadFileBufferFromFirebaseUrl,
     downloadFileOfCloudStorage,
     deleteFileToCloudStorage
 };
