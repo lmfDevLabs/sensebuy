@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 // cheerio (default export en ESM)
 import * as cheerio from 'cheerio';
 // pdf
-import pdfParse from 'pdf-parse';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 // xlsx 
 import xlsx from 'xlsx'
 
@@ -63,28 +63,41 @@ const downloadDocFromExternalUrl = async (url) => {
   });
 };
 
-// Helper Function para extraer texto de PDF (NUEVA FUNCIÓN) ---
 // Recibe el buffer de datos del archivo PDF
 const extractTextFromPdf = async (pdfBuffer) => {
-    try {
-        const data = await pdfParse(pdfBuffer);
-        // data.text contiene el texto extraído de todas las páginas
-        if (!data.text) {
-            return null;
-        }
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: pdfBuffer,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
 
-        const cleanedText = data.text.replace(/\s+/g, ' ').trim();
+    const pdf = await loadingTask.promise;
+    const parts = [];
 
-        if (cleanedText.length === 0) {
-            return null;
-        }
-
-        return cleanedText;
-    } catch (error) {
-        console.error('Error extracting text from PDF:', error);
-        return null;
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent({ includeMarkedContent: true });
+      const text = content.items
+        .map((it) => (typeof it.str === 'string' ? it.str : ''))
+        .filter(Boolean)
+        .join(' ');
+      parts.push(text);
     }
-}
+
+    await pdf.cleanup();
+
+    // Normaliza espacios y líneas
+    const joined = parts.join('\n').replace(/[ \t]+\n/g, '\n').replace(/\s+/g, ' ').trim();
+
+    // Consistencia: devuelve string (posible vacío). El caller decide si es error.
+    return joined;
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    return ''; // devuelve string vacío en caso de error; el caller lo valida
+  }
+};
+
 
 // pdf extractor
 const extractMeaningfulTextFromPdf = async (url) => {
