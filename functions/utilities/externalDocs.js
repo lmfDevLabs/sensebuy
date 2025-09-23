@@ -7,8 +7,9 @@ import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 // pdf
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-// xlsx 
+// xlsx
 import xlsx from 'xlsx'
+import { downloadFileBufferFromFirebaseUrl, parseFirebaseStorageUrl } from './cloudStorage.js';
 
 // convert excel to csv <---------
 const convertExcelToCSV = async (filepath) => {
@@ -40,6 +41,17 @@ const convertExcelToCSV = async (filepath) => {
 // para descargar y procesar docs desde urls
 const downloadDocFromExternalUrl = async (url) => {
   console.log("downloadDocFromExternalUrl");
+  const firebaseUrlInfo = parseFirebaseStorageUrl(url);
+  if (firebaseUrlInfo && process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+    const { buffer, contentType } = await downloadFileBufferFromFirebaseUrl(url, firebaseUrlInfo);
+
+    if (contentType !== 'application/pdf') {
+      throw new Error(`Invalid content-type. Expected application/pdf but received ${contentType}`);
+    }
+
+    return buffer;
+  }
+
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
       if (response.statusCode !== 200) {

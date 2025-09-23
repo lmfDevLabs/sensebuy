@@ -1,4 +1,6 @@
 // node modules
+import http from 'http';
+import https from 'https';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
@@ -7,6 +9,97 @@ import path from 'path';
 import { storage } from '../firebase/admin.js';
 // bucket cs
 const bucket = storage.bucket("gs://sensebuy-e8add.appspot.com/");
+
+const FIREBASE_STORAGE_HOST = 'firebasestorage.googleapis.com';
+const FIREBASE_API_VERSION = 'v0';
+
+const parseFirebaseStorageUrl = (rawUrl) => {
+    if (!rawUrl) {
+        return null;
+    }
+
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(rawUrl);
+    } catch (error) {
+        return null;
+    }
+
+    if (parsedUrl.hostname !== FIREBASE_STORAGE_HOST) {
+        return null;
+    }
+
+    const segments = parsedUrl.pathname.split('/').filter(Boolean);
+    if (segments.length < 5) {
+        return null;
+    }
+
+    const [version, bucketSegmentLabel, bucketName, objectSegmentLabel, ...objectSegments] = segments;
+    if (version !== FIREBASE_API_VERSION || bucketSegmentLabel !== 'b' || objectSegmentLabel !== 'o' || !bucketName || objectSegments.length === 0) {
+        return null;
+    }
+
+    const encodedObjectPath = objectSegments.join('/');
+
+    let decodedObjectPath;
+    try {
+        decodedObjectPath = decodeURIComponent(encodedObjectPath);
+    } catch (error) {
+        decodedObjectPath = encodedObjectPath;
+    }
+
+    return {
+        bucket: bucketName,
+        encodedObjectPath,
+        objectPath: decodedObjectPath,
+        url: parsedUrl,
+    };
+};
+
+const downloadFileBufferFromFirebaseUrl = async (firebaseUrl, parsedInfo = null) => {
+    const parsed = parsedInfo ?? parseFirebaseStorageUrl(firebaseUrl);
+    if (!parsed) {
+        throw new Error('Invalid Firebase Storage download URL');
+    }
+
+    const { bucket: bucketName, encodedObjectPath, url: parsedUrl } = parsed;
+    const searchParams = new URLSearchParams(parsedUrl.searchParams);
+    if (!searchParams.has('alt')) {
+        searchParams.set('alt', 'media');
+    }
+
+    const queryString = searchParams.toString();
+    const emulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    const useEmulator = Boolean(emulatorHost);
+    const requestProtocol = useEmulator ? 'http:' : 'https:';
+    const requestHost = useEmulator ? emulatorHost : FIREBASE_STORAGE_HOST;
+    const requestPath = `/${FIREBASE_API_VERSION}/b/${bucketName}/o/${encodedObjectPath}`;
+    const requestUrl = `${requestProtocol}//${requestHost}${requestPath}${queryString ? `?${queryString}` : ''}`;
+
+    const client = requestProtocol === 'http:' ? http : https;
+
+    return new Promise((resolve, reject) => {
+        const req = client.get(requestUrl, (response) => {
+            if (response.statusCode !== 200) {
+                reject(new Error(`Request Failed. Status Code: ${response.statusCode}`));
+                response.resume();
+                return;
+            }
+
+            const data = [];
+            response.on('data', (chunk) => data.push(chunk));
+            response.on('end', () => {
+                resolve({
+                    buffer: Buffer.concat(data),
+                    contentType: response.headers['content-type'],
+                });
+            });
+            response.on('error', reject);
+        });
+
+        req.on('error', reject);
+    });
+};
 
 // upload files to cloud storage
 const uploadFileToCloudStorage = async (tempFilePath, cloudStoragePath, mimetype) => {
@@ -107,6 +200,8 @@ const deleteFileToCloudStorage = async () => {
 export {
     uploadFileToCloudStorage,
     downloadFileOfCloudStorage,
-    deleteFileToCloudStorage
+    deleteFileToCloudStorage,
+    downloadFileBufferFromFirebaseUrl,
+    parseFirebaseStorageUrl
 };
 
