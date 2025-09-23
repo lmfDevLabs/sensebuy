@@ -894,11 +894,15 @@ const docsPdf = async (req, res) => {
 			busboy.end(req.body);
 		});
 		// Leer y procesar el PDF
-                const pdfBuffer = fs.readFileSync(filePath);
-                const pdfText = await extractTextFromPdf(pdfBuffer);
-                if (pdfText == null) {
-                        throw new Error('Failed to extract text from PDF');
-                }
+    // Leer y procesar el PDF
+    const pdfBuffer = fs.readFileSync(filePath);
+    const pdfText = await extractTextFromPdf(pdfBuffer);
+
+    // Guard: manejar resultado vacío o nulo
+    if (!pdfText || !pdfText.trim()) {
+      throw new Error('Failed to extract text from PDF (empty result)');
+    }
+    
 		// Generar embeddings desde OpenAI
 		const newEmbeddings = await getEmbeddingsFromOpenAI(pdfText);
 		// Ruta para guardar el archivo JSON

@@ -63,7 +63,6 @@ const downloadDocFromExternalUrl = async (url) => {
   });
 };
 
-// Helper Function para extraer texto de PDF (NUEVA FUNCIÓN) ---
 // Recibe el buffer de datos del archivo PDF
 const extractTextFromPdf = async (pdfBuffer) => {
   try {
@@ -85,15 +84,20 @@ const extractTextFromPdf = async (pdfBuffer) => {
         .join(' ');
       parts.push(text);
     }
+
     await pdf.cleanup();
 
-    const joined = parts.join('\n').replace(/[ \t]+\n/g, '\n').trim();
+    // Normaliza espacios y líneas
+    const joined = parts.join('\n').replace(/[ \t]+\n/g, '\n').replace(/\s+/g, ' ').trim();
+
+    // Consistencia: devuelve string (posible vacío). El caller decide si es error.
     return joined;
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
-    return null;
+    return ''; // devuelve string vacío en caso de error; el caller lo valida
   }
 };
+
 
 // pdf extractor
 const extractMeaningfulTextFromPdf = async (url) => {
