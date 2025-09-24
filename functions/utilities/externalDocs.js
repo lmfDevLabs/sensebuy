@@ -37,11 +37,83 @@ const convertExcelToCSV = async (filepath) => {
   }
 };
 
+const normalizeExternalUrlInput = (rawUrl) => {
+  if (rawUrl instanceof URL) {
+    return rawUrl.toString().trim();
+  }
+
+  if (Array.isArray(rawUrl)) {
+    const normalizedEntries = rawUrl
+      .map((entry) => {
+        if (entry instanceof URL) {
+          return entry.toString().trim();
+        }
+
+        if (typeof entry === 'string') {
+          return entry.trim();
+        }
+
+        if (entry == null) {
+          return '';
+        }
+
+        throw new TypeError('Invalid URL entry in array. Expected strings or URL instances.');
+      })
+      .filter((entry) => entry.length > 0);
+
+    if (normalizedEntries.length > 1) {
+      // El endpoint está diseñado para descargar un único documento.
+      // Cuando se proporcionan múltiples URLs, emitimos una advertencia y usamos la primera.
+      console.warn('downloadDocFromExternalUrl received multiple URLs; using the first entry.');
+    }
+
+    return normalizedEntries[0] ?? '';
+  }
+
+  if (typeof rawUrl === 'string') {
+    return rawUrl.trim();
+  }
+
+  if (rawUrl == null) {
+    return '';
+  }
+
+  throw new TypeError('Invalid URL input. Expected a string, URL instance, or array.');
+};
+
+const ensureDownloadableUrl = (candidateUrl) => {
+  if (typeof candidateUrl !== 'string' || candidateUrl.length === 0) {
+    throw new TypeError('A non-empty URL string must be provided to downloadDocFromExternalUrl.');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(candidateUrl);
+  } catch (error) {
+    throw new TypeError('A valid absolute URL string must be provided to downloadDocFromExternalUrl.');
+  }
+
+  if (parsed.protocol === 'gs:') {
+    throw new Error('Firebase Storage URLs must be handled via the Firebase SDK.');
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new TypeError('Only HTTP(S) URLs are supported by downloadDocFromExternalUrl.');
+  }
+
+  if (parsed.hostname === 'firebasestorage.googleapis.com') {
+    throw new Error('Firebase Storage URLs must be handled via the Firebase SDK.');
+  }
+};
+
 // para descargar y procesar docs desde urls
-const downloadDocFromExternalUrl = async (url) => {
+const downloadDocFromExternalUrl = async (url, {httpGet = https.get} = {}) => {
   console.log("downloadDocFromExternalUrl");
+  const normalizedUrl = normalizeExternalUrlInput(url);
+  ensureDownloadableUrl(normalizedUrl);
+
   return new Promise((resolve, reject) => {
-    https.get(url, (response) => {
+    httpGet(normalizedUrl, (response) => {
       if (response.statusCode !== 200) {
         reject(new Error(`Request Failed. Status Code: ${response.statusCode}`));
         response.resume(); // Consume response data to free up memory
