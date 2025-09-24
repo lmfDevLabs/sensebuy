@@ -10,7 +10,7 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "dev": "node index.js",
-    "test": "echo \"No tests specified\""
+    "test": "node --test"
   },
   "engines": {
     "node": "20"
