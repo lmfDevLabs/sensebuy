@@ -12,6 +12,7 @@ const app = express();
 // CORS
 import cors from 'cors';
 app.use(cors({ origin: true }));
+app.use(express.json({ limit: '10mb' }));
 
 // MIDDLEWARES
 import firebaseAuth from './firebase/firebaseAuth.js';
@@ -36,6 +37,7 @@ import {
   docsHtml,
 } from './handlers/products/products.js';
 import { postProductManual } from './handlers/products/postProductManual.js';
+import { createPdfUploadUrl } from './handlers/pdfs/uploadUrl.js';
 
 // buyers 
 import {
@@ -81,12 +83,14 @@ import queueHtmlDocument from './triggers/queueHtmlDocument.js';
 import processHtmlDocument from './triggers/processHtmlDocument.js';
 import queuePdfDocument from './triggers/queuePdfDocument.js';
 import processPdfDocument from './triggers/processPdfDocument.js';
+import queueChunkPrepOnProductsPdfCreate from './triggers/onProductsPdfCreate.js';
 import { queueChunkEmbeddingOnCreate, queueChunkEmbeddingOnUpdate } from './triggers/queueChunkEmbeddings.js';
 import processChunkEmbedding from './triggers/processChunkEmbedding.js';
 import processChunkIndexing from './triggers/processChunkIndexing.js';
 import requeuePendingEmbeddings from './triggers/requeuePendingEmbeddings.js';
 import processChatMessage from './triggers/processChatMessage.js';
 import requeueStuckChatMessages from './triggers/requeueStuckChatMessages.js';
+import chunkPrepFromPdf from './workers/chunkPrepFromPdf.js';
 // import extractChunksFromProductUrlsOnCreate from './triggers/extractChunksFromProductUrlsOnCreate.js';
 
 
@@ -212,6 +216,7 @@ app.get(`/${apiVersion}/testUrlPdf`, async (req,res)=>{
 }) 
 // 14-POST /products/:productId/docs: Para agregar documentos html a un producto.
 app.post(`/${apiVersion}/docsHtml`, firebaseAuth, docsHtml);
+app.post(`/${apiVersion}/pdf/upload-url`, firebaseAuth, createPdfUploadUrl);
 
 /* BUYERS */
 // // super admin
@@ -297,6 +302,7 @@ export {
   processHtmlDocument,
   queuePdfDocument,
   processPdfDocument,
+  queueChunkPrepOnProductsPdfCreate,
   queueChunkEmbeddingOnCreate,
   queueChunkEmbeddingOnUpdate,
   processChunkEmbedding,
@@ -304,5 +310,6 @@ export {
   requeuePendingEmbeddings,
   processChatMessage,
   requeueStuckChatMessages,
+  chunkPrepFromPdf,
   // extractChunksFromProductUrlsOnCreate
 }
