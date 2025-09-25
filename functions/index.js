@@ -37,7 +37,7 @@ import {
   docsHtml,
 } from './handlers/products/products.js';
 import { postProductManual } from './handlers/products/postProductManual.js';
-import { createPdfUploadUrl } from './handlers/pdfs/uploadUrl.js';
+import { createPdfUploadUrl } from './handlers/products/pdfUploadUrl.js';
 
 // buyers 
 import {

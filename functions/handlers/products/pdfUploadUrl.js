@@ -46,7 +46,7 @@ export const createPdfUploadUrl = async (req, res) => {
     });
 
     const baseDoc = {
-      status: 'pre-queued',
+      status: 'waiting-upload',
       bucket: bucketName,
       objectPath,
       fileName,
@@ -57,7 +57,7 @@ export const createPdfUploadUrl = async (req, res) => {
       uploadRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
       uploadExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       chunkPrep: {
-        status: 'waiting',
+        status: 'waiting-upload',
       },
       metadata: {
         requestIp: req.headers['x-forwarded-for'] || req.ip || null,
@@ -73,4 +73,3 @@ export const createPdfUploadUrl = async (req, res) => {
     return res.status(500).send({ error: 'Failed to create upload URL' });
   }
 };
-

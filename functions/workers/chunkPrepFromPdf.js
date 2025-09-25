@@ -12,8 +12,8 @@ import { filterChunksByQuality } from '../utilities/chunkQuality.js';
 import { computeHash } from '../utilities/hash.js';
 
 const PDF_HEADER = '%PDF-';
-const WAIT_ATTEMPTS = 10;
-const WAIT_DELAY_MS = 1500;
+const WAIT_ATTEMPTS = 30;
+const WAIT_DELAY_MS = 2000;
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -409,14 +409,32 @@ const chunkPrepFromPdf = onMessagePublished(
       const errorText =
         error?.message ?? (typeof error === 'string' ? error : JSON.stringify(error));
       console.error('chunkPrepFromPdf failed', { docPath, error: errorText });
-      await docRef.update({
-        status: 'error',
-        'chunkPrep.status': 'error',
-        'chunkPrep.errorAt': admin.firestore.FieldValue.serverTimestamp(),
-        'chunkPrep.errorMessage': errorText,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastError: errorText,
-      });
+
+      const waitingForUpload = errorText.includes(
+        'PDF not found or empty after waiting for upload',
+      );
+
+      const updatePayload = waitingForUpload
+        ? {
+            status: 'waiting-upload',
+            'chunkPrep.status': 'waiting-upload',
+            'chunkPrep.waitingSince': admin.firestore.FieldValue.serverTimestamp(),
+            'chunkPrep.errorMessage': errorText,
+            'chunkPrep.retries': admin.firestore.FieldValue.increment(1),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastError: errorText,
+          }
+        : {
+            status: 'error',
+            'chunkPrep.status': 'error',
+            'chunkPrep.errorAt': admin.firestore.FieldValue.serverTimestamp(),
+            'chunkPrep.errorMessage': errorText,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastError: errorText,
+          };
+
+      await docRef.update(updatePayload);
+
       throw error;
     }
   },
