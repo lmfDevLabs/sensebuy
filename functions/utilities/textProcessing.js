@@ -57,6 +57,7 @@ const prepareTextForEmbedding = async (productData) => {
     }
 };
 
+
 // obtener keywords del "parrafo activo final"
 const generateListOfKeyWordsOfProduct = async (paragraph) => {
     if (!paragraph || typeof paragraph !== "string") {
@@ -174,10 +175,10 @@ const pickParams = (text, opts = {}) => {
 /////////////////////////////////////////////// LANGCHAIN ///////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
 // chunking con LangChain basado en parámetros dinámicos
-const splitTextWithLangChain = async (text, manual = {}) => {
+const splitTextWithLangChainDetailed = async (text, manual = {}) => {
   if (!text || typeof text !== 'string') {
     console.warn('⚠️ No valid text provided to splitTextWithLangChain');
-    return [];
+    return { chunks: [], documents: [], config: null };
   }
 
   const auto = pickParams(text);
@@ -190,11 +191,21 @@ const splitTextWithLangChain = async (text, manual = {}) => {
 
   const splitter = new RecursiveCharacterTextSplitter(cfg);
   const docs = await splitter.createDocuments([text]);
-  const chunks = docs.map((d) => normalizeWhitespace(d.pageContent));
+  const normalizedDocs = docs.map((d) => ({
+    text: normalizeWhitespace(d.pageContent),
+    metadata: d.metadata ?? {},
+  }));
+  const chunks = normalizedDocs.map((d) => d.text);
 
   console.log(
     `🔎 [Chunking] ${chunks.length} chunks (size=${cfg.chunkSize}, overlap=${cfg.chunkOverlap})`,
   );
+
+  return { chunks, documents: normalizedDocs, config: cfg };
+};
+
+const splitTextWithLangChain = async (text, manual = {}) => {
+  const { chunks } = await splitTextWithLangChainDetailed(text, manual);
   return chunks;
 };
 
@@ -204,4 +215,6 @@ export {
     generateListOfKeyWordsOfProduct, // <----------
     chunkText,
     splitTextWithLangChain, // <----------
+    splitTextWithLangChainDetailed,
+    normalizeWhitespace,
 };
