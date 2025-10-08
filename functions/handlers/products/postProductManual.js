@@ -18,33 +18,6 @@ funcionalidad. Además, incluye características de entretenimiento como 8-inch 
 El precio del vehículo es de $27650, y tiene una calificación promedio de 4.6.
 `.trim();
 
-const ATTRIBUTE_LABELS = {
-  car_make: 'Marca del vehículo',
-  car_model: 'Modelo del vehículo',
-  description: 'Descripción',
-  year: 'Año',
-  body_type: 'Tipo de carrocería',
-  color_options: 'Opciones de color',
-  fuel_type: 'Tipo de combustible',
-  engine_size_l: 'Motor (L)',
-  horsepower: 'Caballos de fuerza',
-  torque_nm: 'Torque (Nm)',
-  transmission_type: 'Tipo de transmisión',
-  acceleration_0_60_mph: 'Aceleración 0 a 60 mph (s)',
-  top_speed_mph: 'Velocidad máxima (mph)',
-  mileage_mpg: 'Rendimiento de combustible (mpg)',
-  safety_features: 'Características de seguridad',
-  entertainment_features: 'Características de entretenimiento',
-  interior_features: 'Equipamiento interior',
-  exterior_features: 'Equipamiento exterior',
-  price: 'Precio (USD)',
-  customer_ratings: 'Calificación de clientes',
-  pics: 'Imágenes del producto',
-  pdf: 'Documentos PDF',
-  product_url: 'URL del producto',
-  notes_seller: 'Notas del vendedor',
-};
-
 const ARRAY_FIELDS_TO_JOIN = [
   'color_options',
   'safety_features',
@@ -55,11 +28,40 @@ const ARRAY_FIELDS_TO_JOIN = [
   'pdf',
 ];
 
-const buildAttributeDictionary = (product) => {
+const normalizeDictionaryEntry = (entry) => {
+  if (!entry) {
+    return undefined;
+  }
+
+  if (typeof entry === 'string') {
+    const trimmed = entry.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (typeof entry === 'object') {
+    const { descripcion, description } = entry;
+    const resolved = descripcion?.trim() || description?.trim();
+    return resolved && resolved.length > 0 ? resolved : undefined;
+  }
+
+  return undefined;
+};
+
+const keyToReadableLabel = (key) =>
+  key
+    .split('_')
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+
+const buildAttributeDictionary = (product, customDictionary = {}) => {
   const dictionary = {};
   Object.keys(product).forEach((key) => {
+    const customDescription = normalizeDictionaryEntry(customDictionary[key]);
+    const fallbackLabel = keyToReadableLabel(key);
+    const description = customDescription || fallbackLabel;
     dictionary[key] = {
-      descripcion: ATTRIBUTE_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+      descripcion: description,
     };
   });
   return dictionary;
@@ -103,7 +105,7 @@ export const postProductManual = async (req, res) => {
 
     const product = parseResult.data;
     const productForLlm = prepareProductForLlm(product);
-    const attributeDictionary = buildAttributeDictionary(productForLlm);
+    const attributeDictionary = buildAttributeDictionary(productForLlm, res.locals.dataDictionary);
     const productNameParts = [product.car_make, product.car_model].filter((value) => value);
     const productName = productNameParts.join(' - ') || 'Producto';
 
@@ -131,6 +133,7 @@ export const postProductManual = async (req, res) => {
       exampleParagraph,
     );
     product.activeParagraph = activeParagraph;
+    product.attributeDictionary = attributeDictionary;
 
     const tracedGenerateKeywords = traceable(
       generateListOfKeyWordsOfProduct,

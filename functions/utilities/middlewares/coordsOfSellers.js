@@ -17,14 +17,17 @@ const coordsOfSellers = async (req, res, next) => {
         }
 
         // Extract and pass data to the next middleware
+        const sellerDoc = doc.data();
         const sellerData = {
-            coords: doc.data().coords,
-            companyData: doc.data().companyData
+            coords: sellerDoc.coords,
+            companyData: sellerDoc.companyData,
+            dataDictionary: sellerDoc.dataDictionary || {}
 
         };
         console.log('sellerData: ', sellerData);
         res.locals.coordsData = sellerData.coords;
         res.locals.companyData = sellerData.companyData;
+        res.locals.dataDictionary = sellerData.dataDictionary;
         return next();
     } catch (err) {
         console.error('Error while fetching seller data: ', err);
