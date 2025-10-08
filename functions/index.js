@@ -23,6 +23,7 @@ import coordsOfSellers from './utilities/middlewares/coordsOfSellers.js';
 import {
   sellers,
   coords,
+  updateDataDictionary,
 } from './handlers/sellers/sellers.js';
 
 // products
@@ -171,6 +172,7 @@ app.post(`/${apiVersion}/sellers`, firebaseAuth, sellers);
 // app.delete(`/${apiVersion}/sellers/:sellerId`, firebaseAuth, deleteSeller);
 // 6-POST /sellers/:sellerId/coords: Para agregar coordenadas a un vendedor.
 app.post(`/${apiVersion}/sellers/coords`, firebaseAuth, coords);
+app.post(`/${apiVersion}/sellers/dataDictionary`, firebaseAuth, updateDataDictionary);
 // // 7-POST /sellers/:sellerId/images/local360: Para agregar una imagen 360 del local en un vendedor.
 // app.post(`/${apiVersion}/sellers/:sellerId/images/local360`, firebaseAuth, localImage360);
 

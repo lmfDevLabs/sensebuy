@@ -1,5 +1,6 @@
 import { db } from '../../firebase/admin.js';
 import firebaseConfig from '../../firebase/firebaseConfig.js';
+import { SellerDataDictionarySchema } from '../../schemas/sellerDataDictionary.js';
 
 // node
 import path from 'path';
@@ -110,7 +111,7 @@ const coords = async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
 };
-    
+
 const postPic360UrlOnSellerDoc = (req, res) => {
     try {
         // check if the user can post on sellers collection
@@ -165,9 +166,57 @@ const postPic360UrlOnSellerDoc = (req, res) => {
     }
 };
 
+const updateDataDictionary = async (req, res) => {
+    try {
+        if (!req.user || req.user.type !== "seller") {
+            return res.status(403).json({ error: 'Insufficient permissions' });
+        }
+
+        const rawPayload = req.body?.dataDictionary ?? req.body ?? {};
+        const normalizedPayload = { ...rawPayload };
+
+        if (normalizedPayload.id_from_selller && !normalizedPayload.id_from_seller) {
+            normalizedPayload.id_from_seller = normalizedPayload.id_from_selller;
+        }
+
+        delete normalizedPayload.id_from_selller;
+
+        const parseResult = SellerDataDictionarySchema.safeParse(normalizedPayload);
+
+        if (!parseResult.success) {
+            return res.status(400).json({
+                error: 'Invalid data dictionary payload',
+                details: parseResult.error.flatten ? parseResult.error.flatten() : parseResult.error,
+            });
+        }
+
+        const dataDictionary = parseResult.data;
+        const sellerRef = db.collection('sellers').where('admin.userId', '==', req.user.uid);
+        const sellerSnapshot = await sellerRef.get();
+
+        if (sellerSnapshot.empty) {
+            return res.status(404).json({ error: 'Seller not found' });
+        }
+
+        const updates = [];
+
+        sellerSnapshot.forEach((doc) => {
+            updates.push(doc.ref.set({ dataDictionary }, { merge: true }));
+        });
+
+        await Promise.all(updates);
+
+        return res.status(200).json({ message: 'Data dictionary updated successfully' });
+    } catch (error) {
+        console.error('Error updating seller data dictionary:', error);
+        return res.status(500).json({ error: 'Failed to update data dictionary' });
+    }
+};
+
 export {
     sellers,
     coords,
-    postPic360UrlOnSellerDoc
+    postPic360UrlOnSellerDoc,
+    updateDataDictionary
 };
 
